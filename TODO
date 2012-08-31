@@ -1,0 +1,12 @@
+* change default data directory to something torch friendly
+* pull general purpose fns out of mnist and into util
+* get house_numbers running again
+ - also with test dataset
+
+* add support for
+ - cifar
+ - others already in Torch friendly format here (http://data.neuflow.org/data/)
+ - norb (http://www.cs.nyu.edu/~ylclab/data/norb-v1.0/)
+ - norb small (http://www.cs.nyu.edu/~ylclab/data/norb-v1.0-small/)
+ - labeled faces (http://vis-www.cs.umass.edu/lfw/index.html)
+ - caltech 101, faces, pedestrians, etc...  (http://www.vision.caltech.edu/archive.html)
