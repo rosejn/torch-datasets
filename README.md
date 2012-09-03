@@ -19,11 +19,11 @@ algorithms with Torch7.
 Each dataset should provide a dataset() function that returns a table.  This
 table consists of:
 
-  size:       function returning size of dataset (mandatory)
-  __index:    the index operator (mydataset[i]) which returns data items (mandatory)
+* size:       function returning size of dataset (mandatory)
+* __index:    the index operator (mydataset[i]) which returns data items (mandatory)
 
 Each data item is a table consisting of:
 
-  input:     tensor data value (mandatory)
-  target:    target tensor value
-  label:     data label (unspecified type)
+* input:     tensor data value (mandatory)
+* target:    target tensor value
+* label:     data label (unspecified type)
