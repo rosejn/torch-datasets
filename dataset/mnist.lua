@@ -8,7 +8,7 @@ require 'dataset/util'
 
 mnist = {
     name       = 'mnist',
-    classes    = {'1','2','3','4','5','6','7','8','9','0'},
+    classes    = {1, 2, 3, 4, 5, 6, 7, 8, 9, 0},
     url        = 'http://data.neuflow.org/data/mnist-th7.tgz',
     train_file = 'mnist-th7/train.th7',
     test_file  = 'mnist-th7/test.th7'
