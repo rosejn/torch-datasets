@@ -3,7 +3,6 @@ require 'image'
 require 'paths'
 
 require 'util/file'
-require 'logroll'
 require 'dataset/util'
 
 mnist = {
