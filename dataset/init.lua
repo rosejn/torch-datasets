@@ -27,13 +27,26 @@ function dataset.get_data(name, url)
   return data_path
 end
 
--- Convert pixel data in place (destructive) from RGB to YUV colorspace.
-function dataset.rgb_to_yuv(pixels, size)
-    for i = 1, size do
-        pixels[i] = image.rgb2yuv(pixels[i])
+-- Downloads the data if not available locally, and returns local path.
+function dataset.data_path(name, url, file)
+    local data_path  = dataset.get_data(name, url)
+    local data_dir   = paths.dirname(data_path)
+    local local_path = paths.concat(data_dir, file)
+
+    if not is_file(local_path) then
+        do_with_cwd(data_dir, function() decompress_tarball(data_path) end)
     end
 
-    return pixels
+    return local_path
+end
+
+-- Convert pixel data in place (destructive) from RGB to YUV colorspace.
+function dataset.rgb_to_yuv(pixel_data)
+    for i = 1, pixel_data:size()[1] do
+        pixel_data[i] = image.rgb2yuv(pixel_data[i])
+    end
+
+    return pixel_data
 end
 
 function dataset.stats(data)
@@ -43,6 +56,20 @@ function dataset.stats(data)
     return mean, std
 end
 
+function dataset.global_normalization(data)
+    local mean, std = dataset.stats(data)
+
+    data:add(-mean)
+    data:mul(1/std)
+
+    return mean, std
+end
+
+function dataset.contrastive_normalization(plane, data)
+    local normalize = nn.SpatialContrastiveNormalization(1, image.gaussian1D(7))
+
+
+end
 
 function dataset.print_stats(dataset)
     for i,channel in ipairs(dataset.channels) do

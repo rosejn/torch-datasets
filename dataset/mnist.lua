@@ -4,7 +4,7 @@ require 'paths'
 
 require 'util/file'
 require 'logroll'
-require 'dataset/util'
+require 'dataset'
 
 mnist = {
     name       = 'mnist',
@@ -26,31 +26,11 @@ local function load_data_file(path)
     return n_examples, n_dimensions, tensor
 end
 
-local function normalize_data(data)
-    local mean, std = dataset.stats(data)
-
-    data:add(-mean)
-    data:mul(1/std)
-
-    return mean, std
-end
 
 -- Downloads the data if not available locally, and returns local path.
-local function data_path(file)
-    local data_path  = dataset.get_data(mnist.name, mnist.url)
-    local data_dir   = paths.dirname(data_path)
-    local local_path = paths.concat(data_dir, file)
-
-    if not is_file(local_path) then
-        do_with_cwd(data_dir, function() decompress_tarball(data_path) end)
-    end
-
-    return local_path
-end
-
 local function prepare_dataset(path)
     local n_examples, n_dimensions, data = load_data_file(path)
-    local mean, std = normalize_data(data:narrow(2, 1, n_dimensions - 1))
+    local mean, std = dataset.global_normalization(data:narrow(2, 1, n_dimensions - 1))
     local labelvector = torch.zeros(10)
 
     local dataset = util.concat(mnist, {
@@ -75,12 +55,12 @@ local function prepare_dataset(path)
 end
 
 function mnist.dataset()
-    local train_path = data_path(mnist.train_file)
+    local train_path = dataset.data_path(mnist.name, mnist.url, mnist.train_file)
     return prepare_dataset(train_path)
 end
 
 function mnist.test_dataset()
-    local test_path = data_path(mnist.test_file)
+    local test_path = dataset.data_path(mnist.name, mnist.url, mnist.test_file)
     return prepare_dataset(test_path)
 end
 

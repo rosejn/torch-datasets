@@ -35,7 +35,7 @@ end
 -- Convert to YUV colorspace to easily access the brightness (Y) channel.
 function house_numbers.yuv_data()
   local labels, data = house_numbers.rgb_data()
-  local yuv = dataset.rgb_to_yuv(data, house_numbers.size())
+  local yuv = dataset.rgb_to_yuv(data)
 
   return labels, yuv
 end
