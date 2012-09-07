@@ -3,7 +3,6 @@ require 'image'
 require 'paths'
 
 require 'util/file'
-require 'logroll'
 require 'dataset'
 
 mnist = {}
@@ -19,7 +18,6 @@ mnist_md = {
     url          = 'http://data.neuflow.org/data/mnist-th7.tgz',
     file         = 'mnist-th7/train.th7'
 }
-
 
 mnist_test_md = util.concat(mnist_md, {
     size         = function() return 10000 end,
