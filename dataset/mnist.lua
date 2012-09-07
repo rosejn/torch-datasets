@@ -6,13 +6,26 @@ require 'util/file'
 require 'logroll'
 require 'dataset'
 
-mnist = {
-    name       = 'mnist',
-    classes    = {1, 2, 3, 4, 5, 6, 7, 8, 9, 0},
-    url        = 'http://data.neuflow.org/data/mnist-th7.tgz',
-    train_file = 'mnist-th7/train.th7',
-    test_file  = 'mnist-th7/test.th7'
+mnist = {}
+
+mnist_md = {
+    name         = 'mnist',
+    dimensions   = {1, 28, 28},
+    n_dimensions = 1 * 28 * 28,
+    size         = function() return 60000 end,
+
+    classes      = {1, 2, 3, 4, 5, 6, 7, 8, 9, 0},
+
+    url          = 'http://data.neuflow.org/data/mnist-th7.tgz',
+    file         = 'mnist-th7/train.th7'
 }
+
+
+mnist_test_md = util.concat(mnist_md, {
+    size         = function() return 10000 end,
+    file         = 'mnist-th7/test.th7'
+})
+
 
 local function load_data_file(path)
     local f = torch.DiskFile(path, 'r')
@@ -28,12 +41,13 @@ end
 
 
 -- Downloads the data if not available locally, and returns local path.
-local function prepare_dataset(path)
+local function prepare_dataset(md)
+    local path = dataset.data_path(md.name, md.url, md.file)
     local n_examples, n_dimensions, data = load_data_file(path)
     local mean, std = dataset.global_normalization(data:narrow(2, 1, n_dimensions - 1))
     local labelvector = torch.zeros(10)
 
-    local dataset = util.concat(mnist, {
+    local dataset = util.concat(mnist_md, {
         data     = data,
         channels = {'y'},
         mean     = mean,
@@ -48,25 +62,24 @@ local function prepare_dataset(path)
           local label = data[index][n_dimensions]
           local target = labelvector:zero()
           target[label + 1] = 1
-          return {input=input, target=target, label=label}
+
+          local display = function()
+              image.display{image=input:unfold(unpack(dataset.dimensions)),
+                            zoom=4, legend='mnist[' .. index .. ']'}
+          end
+
+          return {input=input, target=target, label=label, display=display}
       end)
 
     return dataset
 end
 
+
 function mnist.dataset()
-    local train_path = dataset.data_path(mnist.name, mnist.url, mnist.train_file)
-    return prepare_dataset(train_path)
+    return prepare_dataset(mnist_md)
 end
+
 
 function mnist.test_dataset()
-    local test_path = dataset.data_path(mnist.name, mnist.url, mnist.test_file)
-    return prepare_dataset(test_path)
+    return prepare_dataset(mnist_test_md)
 end
-
-function mnist.display(dset, index)
-  local index = index or 1
-  local example = dset[index]
-  image.display{image=example.input:unfold(1, 28, 28), zoom=2, legend='mnist'}
-end
-
