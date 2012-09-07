@@ -56,7 +56,7 @@ local function prepare_dataset(md)
 
     util.set_index_fn(dataset,
       function(self, index)
-          local input = data[index]:narrow(1, 1, n_dimensions - 1)
+          local input = data[index]:narrow(1, 1, n_dimensions - 1):double()
           local label = data[index][n_dimensions]
           local target = labelvector:zero()
           target[label + 1] = 1
