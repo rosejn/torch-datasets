@@ -9,34 +9,41 @@ require 'dataset'
 
 require 'debugger'
 
-cifar10 = {
+cifar10 = {}
+
+cifar10_md = {
     name         = 'cifar10',
-    n_dimensions = 32 * 32 * 3,
+    dimensions   = {3, 32, 32},
+    n_dimensions = 3 * 32 * 32,
     size         = function() return 50000 end,
-    test_size    = function() return 10000 end,
 
     classes      = {'airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck'},
 
     url          = 'http://data.neuflow.org/data/cifar-10-torch.tar.gz',
 
-    train_files  = {'cifar-10-batches-t7/data_batch_1.t7', 'cifar-10-batches-t7/data_batch_2.t7',
+    files        = {'cifar-10-batches-t7/data_batch_1.t7', 'cifar-10-batches-t7/data_batch_2.t7',
                     'cifar-10-batches-t7/data_batch_3.t7', 'cifar-10-batches-t7/data_batch_4.t7',
                     'cifar-10-batches-t7/data_batch_5.t7'},
-    batch_size   = 10000,
-
-    test_files   = {'cifar-10-batches-t7/test_batch.t7'}
+    batch_size   = 10000
 }
 
-local function load_data_files(files)
-    local data   = torch.Tensor(cifar10.size(), cifar10.n_dimensions)
-    local labels = torch.Tensor(cifar10.size())
 
-    for i, file in ipairs(files) do
-        local path = dataset.data_path(cifar10.name, cifar10.url, file)
+cifar10_test_md = util.concat(cifar10_md, {
+    size = function() return 10000 end,
+    files   = {'cifar-10-batches-t7/test_batch.t7'}
+})
+
+
+local function load_data_files(md)
+    local data   = torch.Tensor(md.size(), md.n_dimensions)
+    local labels = torch.Tensor(md.size())
+
+    for i, file in ipairs(md.files) do
+        local path = dataset.data_path(md.name, md.url, file)
 
         local subset = torch.load(path, 'ascii')
-        data[  {{(i - 1) * cifar10.batch_size + 1, i * cifar10.batch_size}}] = subset.data:t():double()
-        labels[{{(i - 1) * cifar10.batch_size + 1, i * cifar10.batch_size}}] = subset.labels
+        data[  {{(i - 1) * md.batch_size + 1, i * md.batch_size}}] = subset.data:t():double()
+        labels[{{(i - 1) * md.batch_size + 1, i * md.batch_size}}] = subset.labels
     end
     labels = labels + 1
 
@@ -47,7 +54,7 @@ end
 local function local_normalization(data)
     normalization = nn.SpatialContrastiveNormalization(1, image.gaussian1D(7))
 
-    for i = 1, cifar10.size() do
+    for i = 1, cifar10_md.size() do
         -- rgb -> yuv
         local yuv = image.rgb2yuv(data[i])
 
@@ -76,61 +83,75 @@ local function global_normalization(data)
     return data
 end
 
-local function prepare_dataset(files)
-    local data, labels = load_data_files(files)
 
-    data = data:reshape(cifar10.size(), 3, 32, 32)
-    data = local_normalization(data)
-    data = global_normalization(data)
+local function present_dataset(dataset)
+    local labelvector = torch.zeros(10)
 
-    local dataset = util.concat(cifar10, {
-        data = data,
-        labels = labels,
-    })
+    util.set_index_fn(dataset,
+      function(self, index)
+          local input = dataset.data[index]
+          local label = dataset.labels[index]
+          local target = labelvector:zero()
+          target[label] = 1
+
+          local display = function()
+              image.display{image=input, zoom=4, legend='cifar10[' .. index .. ']'}
+          end
+
+          return {input=input, target=target, label=label, display=display}
+      end)
 
     return dataset
 end
 
--- TODO: finish implementing these index functions copied from mnist
+local function prepare_dataset(md)
+    local data, labels = load_data_files(md)
+
+    data = data:reshape(md.size(), 3, 32, 32)
+    data = local_normalization(data)
+    data = global_normalization(data)
+
+    local dataset = util.concat(md, {
+        data   = data,
+        labels = labels,
+    })
+
+    return present_dataset(dataset)
+end
+
 
 function cifar10.dataset()
-    local dataset = prepare_dataset(cifar10.train_files)
+    return prepare_dataset(cifar10_md)
+end
 
-    --[[
-    util.set_index_fn(dataset,
-      function(self, index)
-          local input = data[index]:narrow(1, 1, n_dimensions - 1)
-          local label = data[index][n_dimensions]
-          local target = labelvector:zero()
-          target[label + 1] = 1
-          return {input=input, target=target, label=label}
-      end)
-      ]]
 
-    return dataset
+function cifar10.raw_dataset()
+    local data, labels = load_data_files(cifar10_md)
+
+    data = data:reshape(cifar10_md.size(), 3, 32, 32)
+
+    local dataset = util.concat(cifar10_md, {
+        data   = data,
+        labels = labels,
+    })
+
+    return present_dataset(dataset)
 end
 
 
 function cifar10.test_dataset()
-    local dataset = prepare_dataset(cifar10.test_files)
-    dataset.size = cifar10.test_size
-
-    --[[
-    util.set_index_fn(dataset,
-      function(self, index)
-          local input = data[index]:narrow(1, 1, n_dimensions - 1)
-          local label = data[index][n_dimensions]
-          local target = labelvector:zero()
-          target[label + 1] = 1
-          return {input=input, target=target, label=label}
-      end)
-      ]]
-
-    return dataset
+    return prepare_dataset(cifar10_test_md)
 end
 
-function cifar10.display(dset, index)
-  local index = index or 1
-  local example = dset[index]
-  image.display{image=example.input:unfold(1, 28, 28), zoom=2, legend='mnist'}
+
+function cifar10.raw_test_dataset()
+    local data, labels = load_data_files(cifar10_test_md)
+    data = data:reshape(cifar10_test_md.size(), 3, 32, 32)
+
+    local dataset = util.concat(cifar10_test_md, {
+        data   = data,
+        labels = labels,
+    })
+
+    return present_dataset(dataset)
 end
