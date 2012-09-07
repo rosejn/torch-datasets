@@ -7,8 +7,6 @@ require 'util/file'
 require 'logroll'
 require 'dataset'
 
-require 'debugger'
-
 cifar10 = {}
 
 cifar10_md = {
