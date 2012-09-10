@@ -99,6 +99,11 @@ local function present_dataset(dataset)
           return {input=input, target=target, label=label, display=display}
       end)
 
+      util.set_size_fn(dataset,
+        function(self)
+            return self.size()
+        end)
+
     return dataset
 end
 

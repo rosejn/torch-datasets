@@ -98,6 +98,11 @@ local function prepare_dataset(path)
         return {input=data[i], target=target, label=labels[i]}
     end)
 
+    util.set_size_fn(dataset,
+    function(self)
+        return self.size()
+    end)
+
   return dataset
 end
 
