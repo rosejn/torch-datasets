@@ -26,7 +26,7 @@ cifar10_md = {
 }
 
 
-cifar10_test_md = util.concat(cifar10_md, {
+cifar10_test_md = util.merge(util.copy(cifar10_md), {
     size = function() return 10000 end,
     files   = {'cifar-10-batches-t7/test_batch.t7'}
 })
@@ -114,7 +114,7 @@ local function prepare_dataset(md)
     data = local_normalization(data)
     data = global_normalization(data)
 
-    local dataset = util.concat(md, {
+    local dataset = util.merge(util.copy(md), {
         data   = data,
         labels = labels,
     })
@@ -133,7 +133,7 @@ function cifar10.raw_dataset()
 
     data = data:reshape(cifar10_md.size(), 3, 32, 32)
 
-    local dataset = util.concat(cifar10_md, {
+    local dataset = util.merge(util.copy(cifar10_md), {
         data   = data,
         labels = labels,
     })
@@ -151,10 +151,12 @@ function cifar10.raw_test_dataset()
     local data, labels = load_data_files(cifar10_test_md)
     data = data:reshape(cifar10_test_md.size(), 3, 32, 32)
 
-    local dataset = util.concat(cifar10_test_md, {
+    local dataset = util.merge(util.copy(cifar10_test_md), {
         data   = data,
         labels = labels,
     })
 
     return present_dataset(dataset)
 end
+
+

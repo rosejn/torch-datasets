@@ -19,7 +19,7 @@ mnist_md = {
     file         = 'mnist-th7/train.th7'
 }
 
-mnist_test_md = util.concat(mnist_md, {
+mnist_test_md = util.merge(util.copy(mnist_md), {
     size         = function() return 10000 end,
     file         = 'mnist-th7/test.th7'
 })
@@ -45,7 +45,7 @@ local function prepare_dataset(md)
     local mean, std = dataset.global_normalization(data:narrow(2, 1, n_dimensions - 1))
     local labelvector = torch.zeros(10)
 
-    local dataset = util.concat(mnist_md, {
+    local dataset = util.merge(util.copy(mnist_md), {
         data     = data,
         channels = {'y'},
         mean     = mean,
