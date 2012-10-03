@@ -39,11 +39,13 @@ end
 
 
 -- Downloads the data if not available locally, and returns local path.
-local function prepare_dataset(md)
+local function prepare_dataset(md, options)
     local path = dataset.data_path(md.name, md.url, md.file)
     local n_examples, n_dimensions, data = load_data_file(path)
     local mean, std = dataset.global_normalization(data:narrow(2, 1, n_dimensions - 1))
     local labelvector = torch.zeros(10)
+
+    local convo_sample
 
     local dataset = util.merge(util.copy(mnist_md), {
         data     = data,
@@ -53,6 +55,10 @@ local function prepare_dataset(md)
         size     = function() return n_examples end,
         n_dimensions = n_dimensions - 1,
     })
+
+    if options.convolutional then
+        convo_sample = torch.Tensor(unpack(md.dimensions))
+    end
 
     util.set_index_fn(dataset,
       function(self, index)
@@ -66,7 +72,12 @@ local function prepare_dataset(md)
                             zoom=4, legend='mnist[' .. index .. ']'}
           end
 
-          return {input=input, target=target, label=label, display=display}
+          if options.convolutional then
+              convo_sample:copy(input)
+              return {input=convo_sample, target=target, label=label, display=display}
+          else
+              return {input=input, target=target, label=label, display=display}
+          end
       end)
 
       util.set_size_fn(dataset,
@@ -78,11 +89,12 @@ local function prepare_dataset(md)
 end
 
 
-function mnist.dataset()
-    return prepare_dataset(mnist_md)
+function mnist.dataset(options)
+    return prepare_dataset(mnist_md, options)
 end
 
 
-function mnist.test_dataset()
-    return prepare_dataset(mnist_test_md)
+function mnist.test_dataset(options)
+    return prepare_dataset(mnist_test_md, options)
 end
+
