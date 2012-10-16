@@ -74,9 +74,19 @@ local function prepare_dataset(md, options)
 
           if options.convolutional then
               convo_sample:copy(input)
-              return {input=convo_sample, target=target, label=label, display=display}
+              return {
+                  input   = convo_sample,
+                  target  = target,
+                  label   = label,
+                  display = display
+              }
           else
-              return {input=input, target=target, label=label, display=display}
+              return {
+                  input   = input,
+                  target  = target,
+                  label   = label,
+                  display = display
+              }
           end
       end)
 

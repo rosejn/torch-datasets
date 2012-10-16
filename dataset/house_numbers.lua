@@ -2,23 +2,25 @@ require 'nn'
 require 'paths'
 
 require 'util'
-require 'dataset/util'
+require 'dataset'
 
-house_numbers = {
+house_numbers_md = {
   name    = 'house_numbers',
   classes = {'1','2','3','4','5','6','7','8','9','0'},
   url     = 'http://data.neuflow.org/data/housenumbers/train_32x32.t7',
+  file    = 'train_32x32.t7',
   size    = function()
     return 10000
   end,
-
-  test_url  = 'http://data.neuflow.org/data/housenumbers/test_32x32.t7',
-  test_size = function()
-    return 2000
-  end
 }
 
-house_numbers.filename = paths.basename(house_numbers.url)
+house_numbers_test_md = util.merge(util.copy(house_numbers_md), {
+  url  = 'http://data.neuflow.org/data/housenumbers/test_32x32.t7',
+  file = 'test_32x32.t7',
+  size = function()
+    return 2000
+  end
+})
 
 -- Load the data from disk, downloading if necessary, and in this case
 -- transpose to column major.
@@ -33,8 +35,8 @@ function house_numbers.rgb_data(raw_data)
 end
 
 -- Convert to YUV colorspace to easily access the brightness (Y) channel.
-function house_numbers.yuv_data()
-  local labels, data = house_numbers.rgb_data()
+function house_numbers.yuv_data(path)
+  local labels, data = house_numbers.rgb_data(path)
   local yuv = dataset.rgb_to_yuv(data)
 
   return labels, yuv
@@ -76,14 +78,17 @@ function house_numbers.normalize_data(data, n_channels)
 end
 
 -- Returns a normalized, YUV dataset.
-local function prepare_dataset(path)
-  local channels     = {'y','u','v'}
-  local labels, data = house_numbers.yuv_data()
+local function prepare_dataset(md)
+  local path = dataset.data_path(md.name, md.url, md.file)
+
+  local channels     = {'Y','U','V'}
+  local labels, data = house_numbers.yuv_data(path)
   local mean, std    = house_numbers.normalize_data(data, #channels)
 
-  local dataset = concat(house_numbers, {
+  local dataset = util.merge(util.copy(md), {
     data     = data,
     channels = channels,
+    labels   = labels,
     mean     = mean,
     std      = std,
   })
@@ -95,7 +100,21 @@ local function prepare_dataset(path)
         local label = labels[i]
         local target = labelvector:zero()
         target[label + 1] = 1
-        return {input=data[i], target=target, label=labels[i]}
+
+        -- TODO: it would probably be better to show each of the YUV channels in
+        -- greyscale, since this is viewing the already normalized colors in a
+        -- funky way...
+        local display = function()
+            local img = data[{i,{}}]
+            image.display{image=image.yuv2rgb(img), zoom=4, saturate=false, legend='house_numbers: ' .. table.concat(channels)}
+        end
+
+        return {
+            input  = data[i],
+            target = target,
+            label  = labels[i],
+            display = display
+        }
     end)
 
     util.set_size_fn(dataset,
@@ -107,11 +126,11 @@ local function prepare_dataset(path)
 end
 
 function house_numbers.dataset()
+    return prepare_dataset(house_numbers_md)
 end
 
--- TODO: finish me
 function house_numbers.test_dataset()
-
+    return prepare_dataset(house_numbers_test_md)
 end
 
 function house_numbers.display(dataset, n_samples)
