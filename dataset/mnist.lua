@@ -100,11 +100,13 @@ end
 
 
 function mnist.dataset(options)
+    options = options or {}
     return prepare_dataset(mnist_md, options)
 end
 
 
 function mnist.test_dataset(options)
+    options = options or {}
     return prepare_dataset(mnist_test_md, options)
 end
 
