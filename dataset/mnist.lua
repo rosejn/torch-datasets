@@ -42,7 +42,18 @@ end
 local function prepare_dataset(md, options)
     local path = dataset.data_path(md.name, md.url, md.file)
     local n_examples, n_dimensions, data = load_data_file(path)
-    local mean, std = dataset.global_normalization(data:narrow(2, 1, n_dimensions - 1))
+    
+    if options.convolutional then
+        convo_sample = torch.Tensor(unpack(md.dimensions))
+    elseif options.linscale01 then
+    	local m = torch.min(data)  
+	local M = torch.max(data) 
+	data = (data - m) / (M - m)
+	collectgarbage()
+    elseif options.original==nil then
+    	local mean, std = dataset.global_normalization(data:narrow(2, 1, n_dimensions - 1))
+    end
+
     local labelvector = torch.zeros(10)
 
     local convo_sample
@@ -56,9 +67,6 @@ local function prepare_dataset(md, options)
         n_dimensions = n_dimensions - 1,
     })
 
-    if options.convolutional then
-        convo_sample = torch.Tensor(unpack(md.dimensions))
-    end
 
     util.set_index_fn(dataset,
       function(self, index)
