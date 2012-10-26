@@ -48,8 +48,8 @@ local function prepare_dataset(md, options)
     elseif options.linscale01 then
     	local m = torch.min(data)  
 	local M = torch.max(data) 
-	data = (data - m) / (M - m)	
-	print(type(data))
+	data = (data - m) / (M - m)
+	collectgarbage()
     elseif options.original==nil then
     	local mean, std = dataset.global_normalization(data:narrow(2, 1, n_dimensions - 1))
     end
