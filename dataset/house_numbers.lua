@@ -4,6 +4,8 @@ require 'paths'
 require 'util'
 require 'dataset'
 
+house_numbers = {}
+
 house_numbers_md = {
   name    = 'house_numbers',
   classes = {'1','2','3','4','5','6','7','8','9','0'},
@@ -25,7 +27,7 @@ house_numbers_test_md = util.merge(util.copy(house_numbers_md), {
 -- Load the data from disk, downloading if necessary, and in this case
 -- transpose to column major.
 function house_numbers.rgb_data(raw_data)
-  local data_path = dataset.get_data(house_numbers.name, house_numbers.url)
+  local data_path = dataset.get_data(house_numbers_md.name, house_numbers_md.url)
   local raw_data  = torch.load(data_path, 'ascii')
   local labels    = raw_data.y[1]
   local data      = raw_data.X:transpose(3,4)
@@ -99,7 +101,11 @@ local function prepare_dataset(md)
     function(self, i)
         local label = labels[i]
         local target = labelvector:zero()
-        target[label + 1] = 1
+        if label == 10 then
+            target[1] = 1
+        else
+            target[label + 1] = 1
+        end
 
         -- TODO: it would probably be better to show each of the YUV channels in
         -- greyscale, since this is viewing the already normalized colors in a

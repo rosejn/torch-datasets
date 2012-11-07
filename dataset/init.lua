@@ -65,10 +65,20 @@ function dataset.global_normalization(data)
     return mean, std
 end
 
+function dataset.scale(data, min, max)
+    local range = max - min
+    local dmin = data:min()
+    local dmax = data:max()
+    local drange = dmax - dmin
+
+    data:add(-dmin)
+    data:mul(range)
+    data:mul(1/drange)
+    data:add(min)
+end
+
 function dataset.contrastive_normalization(plane, data)
     local normalize = nn.SpatialContrastiveNormalization(1, image.gaussian1D(7))
-
-
 end
 
 function dataset.print_stats(dataset)

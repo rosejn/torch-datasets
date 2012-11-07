@@ -42,8 +42,17 @@ end
 local function prepare_dataset(md, options)
     local path = dataset.data_path(md.name, md.url, md.file)
     local n_examples, n_dimensions, data = load_data_file(path)
-    local mean, std = dataset.global_normalization(data:narrow(2, 1, n_dimensions - 1))
     local labelvector = torch.zeros(10)
+    local mean, std
+
+    if (options.min and options.max) then
+        dataset.scale(data:narrow(2, 1, n_dimensions - 1), options.min, options.max)
+        mean, std = dataset.stats(data:narrow(2, 1, n_dimensions - 1))
+        data:add(-mean)
+        data:mul(1 / math.max(math.abs(data:min()), math.abs(data:max())))
+    else
+        mean, std = dataset.global_normalization(data:narrow(2, 1, n_dimensions - 1))
+    end
 
     local convo_sample
 
@@ -100,13 +109,12 @@ end
 
 
 function mnist.dataset(options)
-    options = options or {}
+    local options = options or {}
     return prepare_dataset(mnist_md, options)
 end
 
 
 function mnist.test_dataset(options)
-    options = options or {}
+    local options = options or {}
     return prepare_dataset(mnist_test_md, options)
 end
-

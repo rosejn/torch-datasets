@@ -1,4 +1,8 @@
-* implement 
+* need some options when requesting a dataset:
+ - number of samples needed, to speedup disk load when testing
+ - scale, min/max, whitening, normalization
+
+* implement
  * __tostring metamethod for user friendly display on the repl
  * __concat maybe? to concat datasets
  * is there a metamethod to implement the size # operator?
