@@ -101,7 +101,11 @@ local function prepare_dataset(md)
     function(self, i)
         local label = labels[i]
         local target = labelvector:zero()
-        target[label + 1] = 1
+        if label == 10 then
+            target[1] = 1
+        else
+            target[label + 1] = 1
+        end
 
         -- TODO: it would probably be better to show each of the YUV channels in
         -- greyscale, since this is viewing the already normalized colors in a
