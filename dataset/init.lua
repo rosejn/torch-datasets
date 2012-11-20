@@ -40,6 +40,20 @@ function dataset.data_path(name, url, file)
     return local_path
 end
 
+
+function dataset.load_data_file(path)
+    local f = torch.DiskFile(path, 'r')
+    f:binary()
+
+    local n_examples   = f:readInt()
+    local n_dimensions = f:readInt()
+    local tensor       = torch.Tensor(n_examples, n_dimensions)
+    tensor:storage():copy(f:readFloat(n_examples * n_dimensions))
+
+    return n_examples, n_dimensions, tensor
+end
+
+
 -- Convert pixel data in place (destructive) from RGB to YUV colorspace.
 function dataset.rgb_to_yuv(pixel_data)
     for i = 1, pixel_data:size()[1] do

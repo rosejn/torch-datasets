@@ -25,23 +25,10 @@ mnist_test_md = util.merge(util.copy(mnist_md), {
 })
 
 
-local function load_data_file(path)
-    local f = torch.DiskFile(path, 'r')
-    f:binary()
-
-    local n_examples   = f:readInt()
-    local n_dimensions = f:readInt()
-    local tensor       = torch.Tensor(n_examples, n_dimensions)
-    tensor:storage():copy(f:readFloat(n_examples * n_dimensions))
-
-    return n_examples, n_dimensions, tensor
-end
-
-
 -- Downloads the data if not available locally, and returns local path.
 local function prepare_dataset(md, options)
     local path = dataset.data_path(md.name, md.url, md.file)
-    local n_examples, n_dimensions, data = load_data_file(path)
+    local n_examples, n_dimensions, data = dataset.load_data_file(path)
     local labelvector = torch.zeros(10)
     local mean, std
 

@@ -24,9 +24,10 @@ house_numbers_test_md = util.merge(util.copy(house_numbers_md), {
   end
 })
 
+
 -- Load the data from disk, downloading if necessary, and in this case
 -- transpose to column major.
-function house_numbers.rgb_data(raw_data)
+function house_numbers.rgb_data()
   local data_path = dataset.get_data(house_numbers_md.name, house_numbers_md.url)
   local raw_data  = torch.load(data_path, 'ascii')
   local labels    = raw_data.y[1]
@@ -36,13 +37,15 @@ function house_numbers.rgb_data(raw_data)
   return labels, data
 end
 
+
 -- Convert to YUV colorspace to easily access the brightness (Y) channel.
-function house_numbers.yuv_data(path)
-  local labels, data = house_numbers.rgb_data(path)
+function house_numbers.yuv_data()
+  local labels, data = house_numbers.rgb_data()
   local yuv = dataset.rgb_to_yuv(data)
 
   return labels, yuv
 end
+
 
 -- Returns the mean and standard deviation of n_channels of pixel data
 function house_numbers.channel_stats(data, n_channels)
@@ -56,6 +59,7 @@ function house_numbers.channel_stats(data, n_channels)
 
   return mean, std, data
 end
+
 
 -- Normalizes the data in place and returns: mean, std.
 -- First per channel, global normalization is shifted by subtracting the mean and
@@ -79,12 +83,11 @@ function house_numbers.normalize_data(data, n_channels)
   return mean, std
 end
 
+
 -- Returns a normalized, YUV dataset.
 local function prepare_dataset(md)
-  local path = dataset.data_path(md.name, md.url, md.file)
-
   local channels     = {'Y','U','V'}
-  local labels, data = house_numbers.yuv_data(path)
+  local labels, data = house_numbers.yuv_data()
   local mean, std    = house_numbers.normalize_data(data, #channels)
 
   local dataset = util.merge(util.copy(md), {
@@ -131,13 +134,16 @@ local function prepare_dataset(md)
   return dataset
 end
 
+
 function house_numbers.dataset()
     return prepare_dataset(house_numbers_md)
 end
 
+
 function house_numbers.test_dataset()
     return prepare_dataset(house_numbers_test_md)
 end
+
 
 function house_numbers.display(dataset, n_samples)
   local n_samples = n_samples or 32
