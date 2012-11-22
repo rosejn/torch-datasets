@@ -41,12 +41,16 @@ function dataset.data_path(name, url, file)
 end
 
 
-function dataset.load_data_file(path)
+function dataset.load_data_file(path, n)
     local f = torch.DiskFile(path, 'r')
     f:binary()
 
     local n_examples   = f:readInt()
     local n_dimensions = f:readInt()
+
+    if n then
+        n_examples = n
+    end
     local tensor       = torch.Tensor(n_examples, n_dimensions)
     tensor:storage():copy(f:readFloat(n_examples * n_dimensions))
 

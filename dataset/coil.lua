@@ -19,6 +19,7 @@ Coil.size         = function() return 7200 end,
 Coil.url          = 'http://somewhere.com/coil-100.t7.zip',
 Coil.file         = 'coil-100.t7'
 
+
 function Coil:__init(options)
    self.md = coil_md
    local path = dataset.data_path(self.md.name, self.md.url, self.md.file)
