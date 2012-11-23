@@ -3,9 +3,12 @@ require 'image'
 require 'paths'
 require 'dok'
 
+require 'fn'
 require 'fn/seq'
 require 'util'
 require 'util/file'
+require 'util/arg'
+local arg = util.arg
 
 require 'dataset'
 require 'debugger'
@@ -40,67 +43,31 @@ function Mnist.raw_test_data(n)
    return data
 end
 
-local function rand_between(min, max)
-   return math.random() * (max - min) + min
-end
-
-local function rand_pair(v_min, v_max)
-   local a = rand_between(v_min, v_max)
-   local b = rand_between(v_min, v_max)
-   --local start = math.min(a, b)
-   --local finish = math.max(a, b)
-   --return start, finish
-   return a,b
-end
-
-local function rotator(start, delta)
-   local angle = start
-   return function(src, dst)
-      image.rotate(dst, src, angle)
-      angle = angle + delta
-   end
-end
-
-local function translator(startx, starty, dx, dy)
-   local started = false
-   local cx = startx
-   local cy = starty
-   return function(src, dst)
-      local res = image.translate(src, cx, cy)
-      dst:copy(res)
-      cx = cx + dx
-      cy = cy + dy
-   end
-end
-
-local function zoomer(start, dz)
-   local factor = start
-   return function(src, dst)
-      local src_width  = src:size()[1]
-      local src_height = src:size()[2]
-      local width      = math.floor(src_width * factor)
-      local height     = math.floor(src_height * factor)
-
-      local res = image.scale(src, width, height)
-      if factor > 1 then
-         local sx = math.floor((width - src_width) / 2)+1
-         local sy = math.floor((height - src_height) / 2)+1
-         dst:copy(res:sub(sx, sx+src_width-1, sy, sy+src_height-1))
-      else
-         local sx = math.floor((src_width - width) / 2)+1
-         local sy = math.floor((src_height - height) / 2)+1
-         dst:zero()
-         dst:sub(sx,  sx+width-1, sy, sy+height-1):copy(res)
-      end
-
-      factor = factor + dz
-   end
-end
-
+-- Setup an MNIST dataset instance.
+--
+--   m = dataset.Mnist()
+--
+--   -- scale values between [0,1] (by default they are in the range [0,255])
+--   m = dataset.Mnist({scale = {0, 1}})
+--
+--   -- or normalize (subtract mean and divide by std)
+--   m = dataset.Mnist({normalize = true})
+--
+--   -- only import a subset of the data (imports full 60,000 samples otherwise)
+--   m = dataset.Mnist({size = 1000})
+--
+--   -- optionally animate mnist digits using translation, rotation, and
+--   -- scaling over a certain number of frames.
+--   m = dataset.Mnist{frames = frames,
+--                     rotation = {-20, 20},
+--                     zoom = {0.3, 1.5},
+--                     translation = {-8, 8, -8, 8}
+--                    }
 function Mnist:__init(opts)
-   local animated
+   local animated, animated_labels
    local scale, normalize, size, frames, rotation, translation, zoom
-   --[[
+   --[[ TODO: dok.unpack seems broken...
+
    local _, scale, normalize, size, frames, rotation, translation, zoom = dok.unpack({...},
          'Mnist:__init',
          'returns a pre-processed MNIST dataset',
@@ -112,24 +79,21 @@ function Mnist:__init(opts)
          {arg='translation', type='table',   help='translation parameters = {xmin, xmax, ymin, ymax}', default=nil},
          {arg='zoom',        type='table',   help='scaling parameters = {min, max}', default=nil})
          ]]
-   scale = opts.scale or {}
-   normalize = opts.normalize or false
-   size = opts.size or Mnist.size
-   frames = opts.frames or 10
-   rotation = opts.rotation
-   translation = opts.translation
-   zoom = opts.zoom
-
-   print("scale: ",       scale)
-   print("rotation: ",    rotation)
-   print("translation: ", translation)
-   print("zoom: ",        zoom)
+   opts        = opts or {}
+   scale       = arg.optional(opts, 'scale', {})
+   normalize   = arg.optional(opts, 'normalize', false)
+   size        = arg.optional(opts, 'size', Mnist.size)
+   frames      = arg.optional(opts, 'frames', 10)
+   rotation    = arg.optional(opts, 'rotation', {})
+   translation = arg.optional(opts, 'translation', {})
+   zoom        = arg.optional(opts, 'zoom', {})
 
    local data = Mnist.raw_data(size)
    local sample_data = data:narrow(2, 1, Mnist.n_dimensions)
-   local class_ids = torch.Tensor(size)
+
+   local labels = torch.Tensor(size)
    for i=1,size do
-      class_ids[i] = data[{i, 785}]
+      labels[i] = data[{i, 785}]
    end
 
    if normalize then
@@ -140,53 +104,201 @@ function Mnist:__init(opts)
       dataset.scale(sample_data, scale[1], scale[2])
    end
 
-   if rotation or translation or zoom then
-      animated = torch.Tensor(frames * size, Mnist.n_dimensions):zero()
+   self.data      = sample_data
+   self.labels    = labels
+   self.size      = size
+   self.frames    = frames
+   self.label_vector = torch.zeros(#Mnist.classes)
 
-      for sample=1,size do
-         local transformers = {}
-         if rotation then
-            local rot_start, rot_finish = rand_pair(rotation[1], rotation[2])
-            rot_start = rot_start * math.pi / 180
-            rot_finish = rot_finish * math.pi / 180
-            local rot_delta = (rot_finish - rot_start) / frames
-            table.insert(transformers, rotator(rot_start, rot_delta))
-         end
+   if (#rotation > 0) or (#translation > 0) or (#zoom > 0) then
+      self:_animate(rotation, translation, zoom)
+   end
+end
 
-         if translation then
-            local xmin_tx, xmax_tx = rand_pair(translation[1], translation[2])
-            local ymin_tx, ymax_tx = rand_pair(translation[3], translation[4])
-            local dx = (xmax_tx - xmin_tx) / frames
-            local dy = (ymax_tx - ymin_tx) / frames
-            table.insert(transformers, translator(xmin_tx, ymin_tx, dx, dy))
-         end
 
-         if zoom then
-            local zoom_start, zoom_finish = rand_pair(zoom[1], zoom[2])
-            local zoom_delta = (zoom_finish - zoom_start) / frames
-            table.insert(transformers, zoomer(zoom_start, zoom_delta))
-         end
+function Mnist:_animate(rotation, translation, zoom)
+   local full_size = self.frames * self.size
+   animated = torch.Tensor(full_size, Mnist.n_dimensions):zero()
+   animated_labels = torch.Tensor(full_size)
 
-         local src = sample_data[sample]:unfold(1, 28, 28)
-         for f=1,frames do
-            local dst = animated:narrow(1, (sample-1)*frames + f, 1):select(1,1):unfold(1, 28, 28)
-            local tsrc = src
-            for _, transform in ipairs(transformers) do
-               transform(tsrc, dst)
-               tsrc = dst
-            end
+   for i=1,self.size do
+      for f=1,self.frames do
+         animated_labels[i+f] = self.labels[i]
+      end
+   end
+
+   for sample=1,self.size do
+      local transformers = {}
+      if (#rotation > 0) then
+         local rot_start, rot_finish = dataset.rand_pair(rotation[1], rotation[2])
+         rot_start = rot_start * math.pi / 180
+         rot_finish = rot_finish * math.pi / 180
+         local rot_delta = (rot_finish - rot_start) / self.frames
+         table.insert(transformers, dataset.rotator(rot_start, rot_delta))
+         self.rotation = rotation
+      end
+
+      if (#translation > 0) then
+         local xmin_tx, xmax_tx = dataset.rand_pair(translation[1], translation[2])
+         local ymin_tx, ymax_tx = dataset.rand_pair(translation[3], translation[4])
+         local dx = (xmax_tx - xmin_tx) / frames
+         local dy = (ymax_tx - ymin_tx) / frames
+         table.insert(transformers, dataset.translator(xmin_tx, ymin_tx, dx, dy))
+         self.translation = translation
+      end
+
+      if (#zoom > 0) then
+         local zoom_start, zoom_finish = dataset.rand_pair(zoom[1], zoom[2])
+         local zoom_delta = (zoom_finish - zoom_start) / self.frames
+         table.insert(transformers, dataset.zoomer(zoom_start, zoom_delta))
+         self.zoom = zoom
+      end
+
+      local src = self.data[sample]:unfold(1, 28, 28)
+      for f=1,self.frames do
+         local dst = animated:narrow(1, (sample-1)*self.frames + f, 1):select(1,1):unfold(1, 28, 28)
+         local tsrc = src
+         for _, transform in ipairs(transformers) do
+            transform(tsrc, dst)
+            tsrc = dst
          end
       end
    end
 
-   self.size      = size
-   self.frames    = frames
-   self.class_ids = class_ids
    self.data      = animated
+   self.labels    = animated_labels
+   self.base_size = self.size
+   self.size      = full_size
 end
 
--- Returns a sequence of animations, where each animation is a tensor of size
--- frames * dimensions.
-function Mnist:animations()
-   return seq.map(function(i) return self.data:narrow(1, (i-1)*self.frames+1, self.frames) end, seq.range(self.size))
+-- Returns the specified (sample, label) pair.
+--
+--   sample, label = m:sample(100)
+function Mnist:sample(i)
+   return self.data[i]:double(), self.labels[i]
 end
+
+-- Returns a sequence of shuffled (sample, label) pairs.
+--
+--   for sample, label in m:samples() do
+--     net:forward(sample)
+--   end
+--
+--   -- you can optionally turn off shuffling
+--   sample_seq = m:samples({shuffled = false})
+function Mnist:samples(options)
+   options = options or {}
+   local shuffled = arg.optional(options, 'shuffled', true)
+   local indices
+
+   if shuffled then
+      indices = torch.randperm(self.size)
+   else
+      indices = seq.range(self.size)
+   end
+
+   return seq.map(index_fn, indices)
+end
+
+
+-- Returns the ith mini batch tuple consisting of (batch_tensor, labels_tensor) pair.
+--
+--   local batch, labels = m:mini_batch(1)
+--
+--   -- or use directly
+--   net:forward(m:mini_batch(1))
+--
+--   -- set the batch size using an options table
+--   local batch, labels = m:mini_batch(1, {size = 100})
+--
+--   -- or get batch as a sequence of samples, rather than a full tensor
+--   for sample, label in m:mini_batch(1, {sequence = true}) do
+--     net:forward(sample)
+--   end
+function Mnist:mini_batch(i, options)
+   options = options or {}
+   local size   = arg.optional(options, 'size', 10)
+   local as_seq = arg.optional(options, 'sequence', false)
+
+   if as_seq then
+      return seq.map(fn.partial(self.sample, self), seq.range(i, i+size-1))
+   else
+      local batch  = self.data:narrow(1, i, size)
+      local labels = self.labels:narrow(1, i, size)
+      return batch, labels
+   end
+end
+
+-- Returns a sequence of mini batches.
+--
+--   -- default options returns contiguous tensors of batch size 10
+--   for batch, labels in m:mini_batches() do
+--      net:forward(batch)
+--   end
+--
+--   -- also possible to set the size, and/or get the batch as a sequence of
+--   -- individual samples.
+--   for batch in m:mini_batches({size = 100, sequence=true}) do
+--     for sample,label in batch do
+--       net:forward(sample)
+--     end
+--   end
+--
+function Mnist:mini_batches(options)
+   options = options or {}
+   local shuffled = arg.optional(options, 'shuffled', true)
+   local indices
+
+   if shuffled then
+      indices = torch.randperm(self.size)
+   else
+      indices = seq.range(self.size)
+   end
+
+   return seq.map(function(i)
+                     return self:mini_batch(i, size, options)
+                  end,
+                  indices)
+end
+
+-- Returns the sequence of frames corresponding to a specific sample's animation.
+--
+--   for frame,label in m:animation(1) do
+--      local img = frame:unfold(1,28,28)
+--      win = image.display({win=win, image=img, zoom=10})
+--      util.sleep(1 / 24)
+--   end
+--
+function Mnist:animation(i)
+   local start = ((i-1) * self.frames) + 1
+   return self:mini_batch(start, self.frames, {sequence = true})
+end
+
+
+-- Returns a sequence of animations, where each animation is a sequence of
+-- samples.
+--
+--   for anim in m:animations() do
+--      for frame,label in anim do
+--         local img = frame:unfold(1,28,28)
+--         win = image.display({win=win, image=img, zoom=10})
+--         util.sleep(1 / 24)
+--      end
+--   end
+--
+function Mnist:animations(options)
+   options = options or {}
+   local shuffled = arg.optional(options, 'shuffled', true)
+   local indices
+
+   if shuffled then
+      indices = torch.randperm(self.base_size)
+   else
+      indices = seq.range(self.base_size)
+   end
+   return seq.map(function(i)
+                     return self:animation(i)
+                  end,
+                  indices)
+end
+
