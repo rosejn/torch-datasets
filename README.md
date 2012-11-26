@@ -17,8 +17,9 @@ algorithms with Torch7.
     -- or normalize (subtract mean and divide by std)
     m = dataset.Mnist({normalize = true})
 
-    -- only import a subset of the data (imports full 60,000 samples otherwise)
-    m = dataset.Mnist({size = 1000})
+    -- only import a subset of the data (imports full 60,000 samples otherwise),
+    -- sorted by class label
+    m = dataset.Mnist({size = 1000, sort = true})
 
     -- optionally animate mnist digits using translation, rotation, and
     -- scaling over a certain number of frames.

@@ -166,3 +166,16 @@ function dataset.zoomer(start, dz)
    end
 end
 
+function dataset.sort_by_class(samples, labels)
+    local size = labels:size()[1]
+    local sorted_labels, sort_indices = torch.sort(labels)
+    local sorted_samples = torch.Tensor(samples:size())
+
+    for i=1, size do
+        sorted_samples[i] = samples[sort_indices[i]]
+    end
+
+    return sorted_samples, sorted_labels
+end
+
+

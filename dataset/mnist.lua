@@ -87,9 +87,10 @@ function Mnist:__init(opts)
    rotation    = arg.optional(opts, 'rotation', {})
    translation = arg.optional(opts, 'translation', {})
    zoom        = arg.optional(opts, 'zoom', {})
+   sorted      = arg.optional(opts, 'sort', false)
 
    local data = Mnist.raw_data(size)
-   local sample_data = data:narrow(2, 1, Mnist.n_dimensions)
+   local samples = data:narrow(2, 1, Mnist.n_dimensions)
 
    local labels = torch.Tensor(size)
    for i=1,size do
@@ -97,14 +98,18 @@ function Mnist:__init(opts)
    end
 
    if normalize then
-       mean, std = dataset.global_normalization(sample_data)
+       mean, std = dataset.global_normalization(samples)
    end
 
    if (#scale > 0) then
-      dataset.scale(sample_data, scale[1], scale[2])
+      dataset.scale(samples, scale[1], scale[2])
    end
 
-   self.data      = sample_data
+   if sorted then
+       samples, labels = dataset.sort_by_class(samples, labels)
+   end
+
+   self.samples   = samples
    self.labels    = labels
    self.size      = size
    self.frames    = frames
@@ -154,7 +159,7 @@ function Mnist:_animate(rotation, translation, zoom)
          self.zoom = zoom
       end
 
-      local src = self.data[sample]:unfold(1, 28, 28)
+      local src = self.samples[sample]:unfold(1, 28, 28)
       for f=1,self.frames do
          local dst = animated:narrow(1, (sample-1)*self.frames + f, 1):select(1,1):unfold(1, 28, 28)
          local tsrc = src
@@ -165,7 +170,7 @@ function Mnist:_animate(rotation, translation, zoom)
       end
    end
 
-   self.data      = animated
+   self.samples      = animated
    self.labels    = animated_labels
    self.base_size = self.size
    self.size      = full_size
@@ -175,7 +180,7 @@ end
 --
 --   sample, label = m:sample(100)
 function Mnist:sample(i)
-   return self.data[i]:double(), self.labels[i]
+   return self.samples[i]:double(), self.labels[i]
 end
 
 -- Returns a sequence of shuffled (sample, label) pairs.
@@ -223,7 +228,7 @@ function Mnist:mini_batch(i, options)
    if as_seq then
       return seq.map(fn.partial(self.sample, self), seq.range(i, i+size-1))
    else
-      local batch  = self.data:narrow(1, i, size)
+      local batch  = self.samples:narrow(1, i, size)
       local labels = self.labels:narrow(1, i, size)
       return batch, labels
    end
