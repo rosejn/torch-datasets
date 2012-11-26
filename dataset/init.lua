@@ -179,3 +179,6 @@ function dataset.sort_by_class(samples, labels)
 end
 
 
+Dataset = torch.class("Dataset")
+
+
