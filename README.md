@@ -7,46 +7,65 @@ algorithms with Torch7.
 ## Usage
 
     require('dataset/mnist')
-    d = mnist.dataset()
-    d.size()                      -- => 60000
-    d[100]                        -- => {[input]  = DoubleTensor - size: 784
-                                         [display] = function: 0x7fbd025076e0
-                                         [target] = DoubleTensor - size: 10
-                                         [label]  = 1}
-    =sample.target               -- => [[
-                                        0
-                                        0
-                                        0
-                                        0
-                                        0
-                                        1
-                                        0
-                                        0
-                                        0
-                                        0
-                                        [torch.DoubleTensor of dimension 10]
-                                      ]]
+    m = dataset.Mnist()
+    d.size                        -- => 60000
+    d:sample(100)                 -- => tensor, label
 
-    =sample.label                 -- => 5
-    m[1].display()                -- shows image on screen
+    -- scale values between [0,1] (by default they are in the range [0,255])
+    m = dataset.Mnist({scale = {0, 1}})
 
-    td = mnist.test_dataset()
-    td.size()                     -- => 10000
+    -- or normalize (subtract mean and divide by std)
+    m = dataset.Mnist({normalize = true})
 
----------------------------------
+    -- only import a subset of the data (imports full 60,000 samples otherwise)
+    m = dataset.Mnist({size = 1000})
 
-    require('dataset/cifar10')
-    c = cifar10.dataset()         -- returns normalized dataset
-    r = cifar10.raw_dataset()     -- returns unmodified dataset
+    -- optionally animate mnist digits using translation, rotation, and
+    -- scaling over a certain number of frames.
+    m = dataset.Mnist{frames = frames,
+                      rotation = {-20, 20},
+                      zoom = {0.3, 1.5},
+                      translation = {-8, 8, -8, 8}
+                     }
 
-Each dataset should provide a dataset() function that returns a table.  This
-table consists of:
+To process a randomly shuffled ordering of the dataset:
 
-* size:       function returning size of dataset (mandatory)
-* __index:    the index operator (mydataset[i]) which returns data items (mandatory)
+    for sample, label in m:samples() do
+      net:forward(sample)
+    end
 
-Each data item is a table consisting of:
+Or access mini batches:
 
-* input:     tensor data value (mandatory)
-* target:    target tensor value
-* label:     data label (unspecified type)
+    local batch, labels = m:mini_batch(1)
+
+    -- or use directly
+    net:forward(m:mini_batch(1))
+
+    -- set the batch size using an options table
+    local batch, labels = m:mini_batch(1, {size = 100})
+
+
+To process the full dataset in randomly shuffled mini-batches:
+
+    for batch, labels in m:mini_batches() do
+       net:forward(batch)
+    end
+
+
+If the dataset was created with animated transformations, these animation
+sequences can be accessed individually or in shuffled order as well:
+
+    for frame,label in m:animation(1) do
+       local img = frame:unfold(1,28,28)
+       win = image.display({win=win, image=img, zoom=10})
+       util.sleep(1 / 24)
+    end
+
+
+    for anim in m:animations() do
+       for frame,label in anim do
+          local img = frame:unfold(1,28,28)
+          win = image.display({win=win, image=img, zoom=10})
+          util.sleep(1 / 24)
+       end
+    end
