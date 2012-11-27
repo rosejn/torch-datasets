@@ -260,16 +260,17 @@ end
 function Mnist:mini_batches(options)
    options = options or {}
    local shuffled = arg.optional(options, 'shuffled', true)
+   local mb_size = arg.optional(options, 'size', 10)
    local indices
 
    if shuffled then
-      indices = torch.randperm(self.size)
+      indices = torch.randperm(self.size / mb_size)
    else
-      indices = seq.range(self.size)
+      indices = seq.range(self.size / mb_size)
    end
 
    return seq.map(function(i)
-                     return self:mini_batch(i, options)
+                     return self:mini_batch((i-1)*mb_size+1, options)
                   end,
                   indices)
 end
