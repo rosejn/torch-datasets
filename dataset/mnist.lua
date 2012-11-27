@@ -269,7 +269,7 @@ function Mnist:mini_batches(options)
    end
 
    return seq.map(function(i)
-                     return self:mini_batch(i, size, options)
+                     return self:mini_batch(i, options)
                   end,
                   indices)
 end
