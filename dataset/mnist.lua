@@ -182,26 +182,43 @@ function Mnist:sample(i)
    return self.samples[i]:double(), self.labels[i]
 end
 
--- Returns a sequence of shuffled (sample, label) pairs.
+-- Returns an infinite sequence of data samples.  By default they
+-- are shuffled (sample, label) pairs, but you can turn shuffling off.
 --
---   for sample, label in m:samples() do
+--   for sample, label in seq.take(1000, m:sampler()) do
 --     net:forward(sample)
 --   end
 --
---   -- you can optionally turn off shuffling
+--   -- turn off shuffling
 --   sample_seq = m:sampler({shuffled = false})
 function Mnist:sampler(options)
    options = options or {}
    local shuffled = arg.optional(options, 'shuffled', true)
    local indices
 
-   if shuffled then
-      indices = torch.randperm(self.size)
-   else
-      indices = seq.range(self.size)
+   local function make_sampler()
+       if shuffled then
+           indices = torch.randperm(self.size)
+       else
+           indices = seq.range(self.size)
+       end
+       return seq.map(fn.partial(self.sample, self), indices)
    end
 
-   return seq.map(fn.partial(self.sample, self), indices)
+   local the_sampler = make_sampler()
+
+   -- Unfortunately we can't use seq.cycle(seq.repeatedly(make_sampler)) because
+   -- returning argument pairs doesn't compose...
+   return function()
+       local s, l = the_sampler()
+       if s then
+           return s, l
+       else
+           the_sampler = make_sampler()
+           s, l = the_sampler()
+           return s, l
+       end
+   end
 end
 
 
@@ -233,7 +250,7 @@ function Mnist:mini_batch(i, options)
    end
 end
 
--- Returns a sequence of mini batches.
+-- Returns an infinite sequence of mini batches.
 --
 --   -- default options returns contiguous tensors of batch size 10
 --   for batch, labels in m:mini_batches() do
@@ -242,7 +259,7 @@ end
 --
 --   -- also possible to set the size, and/or get the batch as a sequence of
 --   -- individual samples.
---   for batch in m:mini_batches({size = 100, sequence=true}) do
+--   for batch in (seq.take(N_BATCHES, m:mini_batches({size = 100, sequence=true})) do
 --     for sample,label in batch do
 --       net:forward(sample)
 --     end
