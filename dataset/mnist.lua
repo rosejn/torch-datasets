@@ -62,6 +62,9 @@ end
 --                     zoom = {0.3, 1.5},
 --                     translation = {-8, 8, -8, 8}
 --                    }
+--
+--   -- use the test data rather than the training data:
+--   m = dataset.Mnist({test = true})
 function Mnist:__init(opts)
    local animated, animated_labels
    local scale, normalize, size, frames, rotation, translation, zoom
@@ -79,16 +82,22 @@ function Mnist:__init(opts)
          {arg='zoom',        type='table',   help='scaling parameters = {min, max}', default=nil})
          ]]
    opts        = opts or {}
+   test        = arg.optional(opts, 'test', false)
    scale       = arg.optional(opts, 'scale', {})
    normalize   = arg.optional(opts, 'normalize', false)
-   size        = arg.optional(opts, 'size', Mnist.size)
+   size        = arg.optional(opts, 'size', test and Mnist.test_size or Mnist.size)
    frames      = arg.optional(opts, 'frames', 10)
    rotation    = arg.optional(opts, 'rotation', {})
    translation = arg.optional(opts, 'translation', {})
    zoom        = arg.optional(opts, 'zoom', {})
    sorted      = arg.optional(opts, 'sort', false)
 
-   local data = Mnist.raw_data(size)
+   local data
+   if test then
+      data = Mnist.raw_test_data(size)
+   else
+      data = Mnist.raw_data(size)
+   end
    local samples = data:narrow(2, 1, Mnist.n_dimensions)
 
    local labels = torch.Tensor(size)
