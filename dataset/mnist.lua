@@ -11,7 +11,6 @@ require 'util/arg'
 local arg = util.arg
 
 require 'dataset'
-require 'debugger'
 
 local Mnist = torch.class("dataset.Mnist")
 Mnist.name         = 'mnist'
@@ -190,8 +189,8 @@ end
 --   end
 --
 --   -- you can optionally turn off shuffling
---   sample_seq = m:samples({shuffled = false})
-function Mnist:samples(options)
+--   sample_seq = m:sampler({shuffled = false})
+function Mnist:sampler(options)
    options = options or {}
    local shuffled = arg.optional(options, 'shuffled', true)
    local indices
@@ -202,7 +201,7 @@ function Mnist:samples(options)
       indices = seq.range(self.size)
    end
 
-   return seq.map(index_fn, indices)
+   return seq.map(fn.partial(self.sample, self), indices)
 end
 
 

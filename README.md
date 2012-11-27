@@ -31,7 +31,7 @@ algorithms with Torch7.
 
 To process a randomly shuffled ordering of the dataset:
 
-    for sample, label in m:samples() do
+    for sample, label in m:sampler() do
       net:forward(sample)
     end
 
