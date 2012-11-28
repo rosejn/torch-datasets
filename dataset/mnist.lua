@@ -98,7 +98,7 @@ function Mnist:__init(opts)
    else
       data = Mnist.raw_data(size)
    end
-   local samples = data:narrow(2, 1, Mnist.n_dimensions)
+   local samples = data:narrow(2, 1, Mnist.n_dimensions):clone()
 
    local labels = torch.Tensor(size)
    for i=1,size do
