@@ -33,6 +33,7 @@ function Mnist.raw_data(n)
    return data
 end
 
+
 -- Get the raw, unprocessed test dataset.
 -- Returns a 10,000 x 785 tensor in the same format as the training set
 -- described above.
@@ -41,6 +42,7 @@ function Mnist.raw_test_data(n)
    local n_examples, n_dimensions, data = dataset.load_data_file(path, n)
    return data
 end
+
 
 -- Setup an MNIST dataset instance.
 --
@@ -178,7 +180,7 @@ function Mnist:_animate(rotation, translation, zoom)
       end
    end
 
-   self.samples      = animated
+   self.samples   = animated
    self.labels    = animated_labels
    self.base_size = self.size
    self.size      = full_size
