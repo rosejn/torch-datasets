@@ -11,6 +11,7 @@ require 'util/arg'
 local arg = util.arg
 
 require 'dataset'
+require 'debugger'
 
 local Mnist = torch.class("dataset.Mnist")
 Mnist.name         = 'mnist'
@@ -68,7 +69,6 @@ end
 --   -- use the test data rather than the training data:
 --   m = dataset.Mnist({test = true})
 function Mnist:__init(opts)
-   local animated, animated_labels
    local scale, normalize, size, frames, rotation, translation, zoom
    --[[ TODO: dok.unpack seems broken...
 
@@ -133,12 +133,12 @@ end
 
 function Mnist:_animate(rotation, translation, zoom)
    local full_size = self.frames * self.size
-   animated = torch.Tensor(full_size, Mnist.n_dimensions):zero()
-   animated_labels = torch.Tensor(full_size)
+   local animated = torch.Tensor(full_size, Mnist.n_dimensions):zero()
+   local animated_labels = torch.Tensor(full_size)
 
    for i=1,self.size do
       for f=1,self.frames do
-         animated_labels[i+f] = self.labels[i]
+         animated_labels[1 + (i-1)*self.frames + (f-1)] = self.labels[i]
       end
    end
 
