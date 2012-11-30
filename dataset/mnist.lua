@@ -190,7 +190,9 @@ end
 --
 --   sample, label = m:sample(100)
 function Mnist:sample(i)
-   return self.samples[i]:double(), self.labels[i]
+   return {sample = self.samples[i]:double(),
+           label  = self.labels[i]
+       }
 end
 
 -- Returns an infinite sequence of data samples.  By default they
@@ -218,18 +220,7 @@ function Mnist:sampler(options)
 
    local the_sampler = make_sampler()
 
-   -- Unfortunately we can't use seq.cycle(seq.repeatedly(make_sampler)) because
-   -- returning argument pairs doesn't compose...
-   return function()
-       local s, l = the_sampler()
-       if s then
-           return s, l
-       else
-           the_sampler = make_sampler()
-           s, l = the_sampler()
-           return s, l
-       end
-   end
+   return seq.flatten(seq.cycle(seq.repeatedly(make_sampler)))
 end
 
 
@@ -257,7 +248,9 @@ function Mnist:mini_batch(i, options)
    else
       local batch  = self.samples:narrow(1, i, size)
       local labels = self.labels:narrow(1, i, size)
-      return batch, labels
+      return {batch   = batch,
+              labels  = labels
+             }
    end
 end
 
@@ -334,4 +327,5 @@ function Mnist:animations(options)
                   end,
                   indices)
 end
+
 

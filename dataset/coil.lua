@@ -6,31 +6,31 @@ require 'fs'
 require 'util'
 require 'util/arg'
 require 'util/file'
-require 'dataset'
+require 'dataset/pipeline'
+require 'fn'
 require 'fn/seq'
 
 local arg = util.arg
 local Coil = torch.class("dataset.Coil")
 
-Coil.name         = 'coil',
-Coil.dimensions   = {1, 128, 128},
-Coil.n_dimensions = 3 * 128 * 128,
-Coil.size         = function() return 7200 end,
-Coil.url          = 'http://somewhere.com/coil-100.t7.zip',
+Coil.name         = 'coil'
+Coil.dimensions   = {1, 128, 128}
+Coil.n_dimensions = 3 * 128 * 128
+Coil.size         = 7200
+Coil.url          = 'http://somewhere.com/coil-100.t7.zip'
 Coil.file         = 'coil-100.t7'
 
-
-function Coil:__init(options)
-   self.md = coil_md
-   local path = dataset.data_path(self.md.name, self.md.url, self.md.file)
+function Coil.load_data()
+   local path = dataset.data_path(Coil.name, Coil.url, Coil.file)
    local n_objects, n_dimensions, data = dataset.load_data_file(path)
-   self.data = data
+   return data
 end
 
 function Coil:raw_rgb_data()
    return n_examples, n_dimensions, data
 end
 
+--[[
 function Coil:get(object, angle)
    local index = object + (angle / 5)
    local input = data[index]:narrow(1, 1, n_dimensions - 2):double()
@@ -88,6 +88,7 @@ function
 
    return dataset
 end
+]]
 
 
 -- Read in the original COIL-100 dataset as ppm files and write out a torch
@@ -107,12 +108,11 @@ function Coil.convert_to_torch(src_dir, path)
    f:writeInt(coil_md.size())
    f:writeInt(coil_md.n_dimensions + 2)
 
-   local files = fs.readdir(src_dir)
-   local obj_files = seq.filter(function(name) return string.find(name, "obj") end, files)
+   local obj_files = matching_file_seq(src_dir, 'obj')
 
    for fname in obj_files do
       _, _, img, angle = string.find(fname, "obj(%d+)__(%d+).ppm")
-      img = tonumber(img)
+      img   = tonumber(img)
       angle = tonumber(angle)
       local index = img + (angle / 5)
 
@@ -124,4 +124,47 @@ function Coil.convert_to_torch(src_dir, path)
 
    f:close()
 end
+
+
+-- Parse a coil filename and return a table of metadata with the image number
+-- and angle of the object.
+local function coil_metadata_extractor(sample)
+   _, _, img, angle = string.find(fname, "obj(%d+)__(%d+).ppm")
+   img   = tonumber(img)
+   angle = tonumber(angle)
+   return {filename = fname,
+           image    = img,
+           class    = img,
+           angle    = angle}
+end
+
+-- Returns a sequence of tables representing the coil images sorted by image number and angle.
+local function coil_info_seq(dir)
+   local files = matching_file_seq(dir, 'obj')
+   local file_maps = seq.table(seq.map(coil_name_to_metadata, files))
+   local numerical_order = function(a, b)
+      if a.image < b.image then
+         return true
+      elseif a.image == b.image then
+         return a.angle < b.angle
+      else
+         return false
+      end
+   end
+
+   table.sort(file_maps, numerical_order)
+   return file_maps
+end
+
+
+function coil_seq(dir, width, height)
+   return fn.thread(coil_info_seq(dir),
+                    pipe.image_loader,
+                    fn.partial(pipe.scaler, width, height),
+                    pipe.rgb2yuv,
+                    --fn.partial(pipe.spatial_normalization, 1, 7),
+                    fn.partial(pipe.movie_player, 10)
+                    )
+end
+
 
