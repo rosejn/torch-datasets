@@ -2,6 +2,7 @@ require 'torch'
 require 'image'
 require 'paths'
 require 'fs'
+require 'nn'
 
 require 'util'
 require 'util/arg'
@@ -11,7 +12,8 @@ require 'fn'
 require 'fn/seq'
 
 local arg = util.arg
-local Coil = torch.class("dataset.Coil")
+--local Coil = torch.class("dataset.Coil")
+Coil = {}
 
 Coil.name         = 'coil'
 Coil.dimensions   = {1, 128, 128}
@@ -126,22 +128,23 @@ function Coil.convert_to_torch(src_dir, path)
 end
 
 
--- Parse a coil filename and return a table of metadata with the image number
+-- Parse a coil file path and return a table of metadata with the image number
 -- and angle of the object.
 local function coil_metadata_extractor(sample)
-   _, _, img, angle = string.find(fname, "obj(%d+)__(%d+).ppm")
+   _, _, img, angle = string.find(sample.filename, "obj(%d+)__(%d+).ppm")
    img   = tonumber(img)
-   angle = tonumber(angle)
-   return {filename = fname,
-           image    = img,
-           class    = img,
-           angle    = angle}
+
+   sample.image = img
+   sample.class = img
+   sample.angle = tonumber(angle)
+
+   return sample
 end
 
 -- Returns a sequence of tables representing the coil images sorted by image number and angle.
-local function coil_info_seq(dir)
-   local files = matching_file_seq(dir, 'obj')
-   local file_maps = seq.table(seq.map(coil_name_to_metadata, files))
+function Coil.image_paths(dir)
+   local files = pipe.matching_paths(dir, 'obj')
+   local file_maps = seq.table(seq.map(coil_metadata_extractor, files))
    local numerical_order = function(a, b)
       if a.image < b.image then
          return true
@@ -153,18 +156,21 @@ local function coil_info_seq(dir)
    end
 
    table.sort(file_maps, numerical_order)
-   return file_maps
+   return seq.seq(file_maps)
 end
 
 
-function coil_seq(dir, width, height)
-   return fn.thread(coil_info_seq(dir),
-                    pipe.image_loader,
-                    fn.partial(pipe.scaler, width, height),
-                    pipe.rgb2yuv,
-                    --fn.partial(pipe.spatial_normalization, 1, 7),
-                    fn.partial(pipe.movie_player, 10)
-                    )
+function coil_images(dir, width, height)
+   return pipe.pipeline(Coil.image_paths(dir),
+                        coil_metadata_extractor,
+                        pipe.image_loader,
+                        pipe.scaler(width, height)
+                        --pipe.rgb2yuv
+                        --pipe.spatial_normalizer(1, 7)
+                        --pipe.patch_sampler(10, 10)
+                        )
 end
+
+
 
 
