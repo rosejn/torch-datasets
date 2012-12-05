@@ -5,13 +5,14 @@ require 'fs'
 require 'nn'
 
 require 'util'
-require 'util/arg'
 require 'util/file'
 require 'dataset/pipeline'
 require 'fn'
 require 'fn/seq'
 
-local arg = util.arg
+require 'dataset'
+require 'dataset/table_dataset'
+
 --local Coil = torch.class("dataset.Coil")
 Coil = {}
 
@@ -21,77 +22,6 @@ Coil.n_dimensions = 3 * 128 * 128
 Coil.size         = 7200
 Coil.url          = 'http://somewhere.com/coil-100.t7.zip'
 Coil.file         = 'coil-100.t7'
-
-function Coil.load_data()
-   local path = dataset.data_path(Coil.name, Coil.url, Coil.file)
-   local n_objects, n_dimensions, data = dataset.load_data_file(path)
-   return data
-end
-
-function Coil:raw_rgb_data()
-   return n_examples, n_dimensions, data
-end
-
---[[
-function Coil:get(object, angle)
-   local index = object + (angle / 5)
-   local input = data[index]:narrow(1, 1, n_dimensions - 2):double()
-   local object_id = data[index][n_dimensions-1]
-   local angle = data[index][n_dimensions]
-
-   local display = function()
-      image.display{image=input:unfold(unpack(dataset.dimensions)),
-      zoom=4, legend='Coil[' .. object .. ',' .. angle ']'}
-   end
-
-   return {
-      input   = input,
-      object  = object_id,
-      angle   = angle
-      display = display
-   }
-end
-
-function
-   --mean, std = dataset.global_normalization(data:narrow(2, 1, n_dimensions - 2))
-
-   local dataset = util.merge(util.copy(coil_md), {
-      data     = data,
-      channels = {'r', 'g', 'b'},
-      mean     = mean,
-      std      = std,
-      size     = function() return n_examples end,
-      n_dimensions = n_dimensions - 2,
-   })
-
-   util.set_index_fn(dataset,
-   function(self, index)
-      local input = data[index]:narrow(1, 1, n_dimensions - 2):double()
-      local object_id = data[index][n_dimensions-1]
-      local angle = data[index][n_dimensions]
-
-      local display = function()
-         image.display{image=input:unfold(unpack(dataset.dimensions)),
-                       zoom=4, legend='mnist[' .. index .. ']'}
-      end
-
-      return {
-         input   = input,
-         object  = object_id,
-         angle   = angle
-         display = display
-      }
-   end)
-
-   util.set_size_fn(dataset,
-   function(self)
-      return self.size()
-   end)
-
-   return dataset
-end
-]]
-
 
 -- Parse a coil file path and return a table of metadata with the image number
 -- and angle of the object.
@@ -125,7 +55,7 @@ function Coil.image_paths(dir)
 end
 
 
-function coil_images(dir, width, height)
+local function processed_coil_images(dir, width, height)
    return pipe.pipeline(Coil.image_paths(dir),
                         coil_metadata_extractor,
                         pipe.image_loader,
@@ -139,18 +69,9 @@ function coil_images(dir, width, height)
 end
 
 
+function Coil.dataset()
+   local pipeline = processed_coil_images('ext/coil-100', 64, 64)
+   local table = pipe.to_data_table(100, pipeline)
 
---[[
-Coil.dataset = {
-   data       = data_tensor
-   object_ids = ids_tensor
-   angles     = angle_tensor
-}
-
-data[i]
-object_ids[i]
-angles[i]
-
-
-d = Dataset(Coil.load_dataset)
-]]
+   return dataset.TableDataset(table)
+end

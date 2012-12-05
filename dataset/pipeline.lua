@@ -279,15 +279,35 @@ function pipe.to_data_table(n, pipeline, dtable)
 end
 
 
+function pipe.data_table_source(table)
+   local dataset = TableDataset(table)
+   return dataset:sampler({shuffled = false})
+end
+
+
+function pipe.type(t, key)
+   return function(sample)
+      if key then
+         sample[key] = sample[key][t](sample[key])
+      else
+         for k,_ in pairs(sample) do
+            sample[k] = sample[key][t](sample[key])
+         end
+      end
+      return sample
+   end
+end
+
+
 function pipe.write_to_disk(path, metadata)
    metadata = metadata or {}
-   local f = torch.DiskFile(path, 'w')
-   f:binary()
+   local file = torch.DiskFile(path, 'w')
+   file:binary()
 
    local count = 0
    return function(sample)
       if sample == nil then
-         f:close()
+         file:close()
 
          local md_file = torch.DiskFile(md_name, 'w')
          md.size = count

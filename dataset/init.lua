@@ -179,4 +179,3 @@ function dataset.sort_by_class(samples, labels)
     return sorted_samples, sorted_labels
 end
 
-
