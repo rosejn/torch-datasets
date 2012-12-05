@@ -28,6 +28,10 @@ require 'fn/seq'
 
 pipe = {}
 
+-- Create a processing pipeline that takes a data source iterator, and a list of
+-- pipeline functions that should all take a sample and return a sample.
+-- e.g.
+--
 function pipe.pipeline(src, ...)
    local args = {...}
    return function()
@@ -92,9 +96,7 @@ end
 -- RGB images will will be (3 x WIDTH x HEIGHT) dimensions.
 -- TODO: might need additional options here for specifying channels etc...
 function pipe.image_loader(sample)
-   if sample == nil then
-      return nil
-   end
+   if sample == nil then return nil end
 
    local data = image.load(sample.path)
    local dims = data:size()
@@ -108,9 +110,7 @@ end
 -- Converts the RGB tensor sample.data to a YUV tensor, separating luminance
 -- information from color.
 function pipe.rgb2yuv(sample)
-   if sample == nil then
-      return nil
-   end
+   if sample == nil then return nil end
 
    sample.data = image.rgb2yuv(sample.data)
    return sample
@@ -120,9 +120,7 @@ end
 -- Scales the sample.data to be the target width and height.
 function pipe.scaler(width, height)
    return function(sample)
-      if sample == nil then
-         return nil
-      end
+      if sample == nil then return nil end
 
       sample.data   = image.scale(sample.data, width, height)
       sample.width  = width
@@ -135,9 +133,7 @@ end
 -- Crop sample.data to the rect defined by (x1, y1), (x2, y2)
 function pipe.cropper(x1, y1, x2, y2)
    return function(sample)
-      if sample == nil then
-         return nil
-      end
+      if sample == nil then return nil end
 
       sample.data = image.crop(sample.data, x1, y1, x2, y2)
       return sample
@@ -148,9 +144,7 @@ end
 -- Crop sample.data to a random patch of size width x height.
 function pipe.patch_sampler(width, height)
    return function(sample)
-      if sample == nil then
-         return nil
-      end
+      if sample == nil then return nil end
 
       local x = math.random(1, sample.width - width)
       local y = math.random(1, sample.height - height)
@@ -167,25 +161,27 @@ end
 -- e.g.
 --   normalizer = pipe.spatial_normalizer(1, 7)
 --   sample = normalizer(sample)
-function pipe.spatial_normalizer(channel, radius, threshold, the)
+function pipe.spatial_normalizer(channel, radius, threshold, thresval)
    local neighborhood  = image.gaussian1D(radius)
-   local normalizer    = nn.SpatialContrastiveNormalization(channel, neighborhood):float()
+   local normalizer    = nn.SpatialContrastiveNormalization(channel, neighborhood, threshold, thresval):float()
 
    return function(sample)
-      if sample == nil then
-         return nil
-      end
+      if sample == nil then return nil end
 
       sample.data = normalizer:forward(sample.data[{{channel},{},{}}]:float())
       return sample
    end
 end
 
---[[
+
+-- Subtract the mean and divide by the std.
 function pipe.normalizer(sample)
    local mean = sample.data:mean()
-   local std  = 
---]]
+   local std  = sample.data:std()
+   sample.data:add(-mean)
+   sample.data:mul(1.0 / std)
+   return sample
+end
 
 
 function pipe.movie_player(src, fps)
@@ -200,9 +196,7 @@ end
 
 local display_win
 function pipe.display(sample)
-   if sample == nil then
-      return nil
-   end
+   if sample == nil then return nil end
 
    display_win = image.display({image = sample.data, win=display_win, zoom=10})
 
@@ -211,27 +205,83 @@ end
 
 
 function pipe.pprint(sample)
-   if sample == nil then
-      return nil
-   end
+   if sample == nil then return nil end
 
    pprint(sample)
    return sample
 end
 
 
-local function disk_file_paths(base_path)
-   local fname = paths.concat(base_path, '.dat')
-   local md_name = paths.concat(base_path, '.md')
-   return fname, md_name
+function pipe.select_keys(...)
+   local keys = {...}
+
+   return function(sample)
+      if sample == nil then return nil end
+
+      local new_sample = {}
+      for _, key in ipairs(keys) do
+         new_sample[key] = sample[key]
+      end
+
+      return new_sample
+   end
 end
+
+
+function pipe.remove_keys(...)
+   local keys = {...}
+
+   return function(sample)
+      if sample == nil then return nil end
+
+      for _, key in ipairs(keys) do
+         sample[key] = nil
+      end
+
+      return sample
+   end
+end
+
+
+function pipe.to_data_table(n, pipeline, dtable)
+   local sample = pipeline()
+
+   -- Inspect the first sample to determine tensor types and dimensions,
+   -- or reuse old dtable if available.
+   if dtable == nil then
+      dtable = {}
+
+      for k,v in pairs(sample) do
+         local store
+
+         if type(v) == 'number' then
+            store = torch.Tensor(n)
+         elseif util.is_tensor(v) then
+            store = torch.Tensor(unpack(util.concat({n}, v:size():totable())))
+         else
+            store = {}
+         end
+         dtable[k] = store
+      end
+   end
+
+   for i, sample in seq.take(n, seq.indexed(seq.concat({sample}, pipeline))) do
+      for k,v in pairs(sample) do
+         if type(v) == 'number' or util.is_tensor(v) then
+            dtable[k][i] = v
+         else
+            table.insert(dtable[k], v)
+         end
+      end
+   end
+
+   return dtable
+end
+
 
 function pipe.write_to_disk(path, metadata)
    metadata = metadata or {}
-   local fname = paths.concat(path, '.dat')
-   local md_name = paths.concat(path, '.md')
-
-   local f = torch.DiskFile(fname, 'w')
+   local f = torch.DiskFile(path, 'w')
    f:binary()
 
    local count = 0
@@ -255,18 +305,11 @@ end
 
 
 function pipe.load_from_disk(path)
-    local f = torch.DiskFile(path, 'r')
-    f:binary()
+   local f = torch.DiskFile(path, 'r')
+   f:binary()
 
-    local n_examples   = f:readInt()
-    local n_dimensions = f:readInt()
+   local tensor       = torch.Tensor(n_examples, n_dimensions)
+   tensor:storage():copy(f:readFloat(n_examples * n_dimensions))
 
-    if n then
-        n_examples = n
-    end
-    local tensor       = torch.Tensor(n_examples, n_dimensions)
-    tensor:storage():copy(f:readFloat(n_examples * n_dimensions))
-
-    return n_examples, n_dimensions, tensor
+   return n_examples, n_dimensions, tensor
 end
---]]

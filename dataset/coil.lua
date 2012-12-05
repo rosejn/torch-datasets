@@ -93,41 +93,6 @@ end
 ]]
 
 
--- Read in the original COIL-100 dataset as ppm files and write out a torch
--- data file.
---
--- The file has a 2 element header:
---    int: n_images
---    int: n_dimensions
---
--- And then n_images entries of the form:
---    float: rgb_data (n_dimensions - 2 in size)
---    float: object_id (0-100)
---    float: angle     (0-360 in increments of 5)
-function Coil.convert_to_torch(src_dir, path)
-   local f = torch.DiskFile(path, 'w')
-   f:binary()
-   f:writeInt(coil_md.size())
-   f:writeInt(coil_md.n_dimensions + 2)
-
-   local obj_files = matching_file_seq(src_dir, 'obj')
-
-   for fname in obj_files do
-      _, _, img, angle = string.find(fname, "obj(%d+)__(%d+).ppm")
-      img   = tonumber(img)
-      angle = tonumber(angle)
-      local index = img + (angle / 5)
-
-      local data = image.load(paths.concat(src_dir, fname))
-      f:writeFloat(data:storage())
-      f:writeFloat(img)
-      f:writeFloat(angle)
-   end
-
-   f:close()
-end
-
-
 -- Parse a coil file path and return a table of metadata with the image number
 -- and angle of the object.
 local function coil_metadata_extractor(sample)
@@ -166,7 +131,9 @@ function coil_images(dir, width, height)
                         pipe.image_loader,
                         pipe.scaler(width, height),
                         pipe.rgb2yuv,
-                        pipe.spatial_normalizer(1, 7)
+                        pipe.normalizer,
+                        pipe.spatial_normalizer(1, 7, 1, 1),
+                        pipe.remove_keys('filename', 'path', 'width', 'height')
                         --pipe.patch_sampler(10, 10)
                         )
 end
