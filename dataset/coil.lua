@@ -164,13 +164,26 @@ function coil_images(dir, width, height)
    return pipe.pipeline(Coil.image_paths(dir),
                         coil_metadata_extractor,
                         pipe.image_loader,
-                        pipe.scaler(width, height)
-                        --pipe.rgb2yuv
-                        --pipe.spatial_normalizer(1, 7)
+                        pipe.scaler(width, height),
+                        pipe.rgb2yuv,
+                        pipe.spatial_normalizer(1, 7)
                         --pipe.patch_sampler(10, 10)
                         )
 end
 
 
 
+--[[
+Coil.dataset = {
+   data       = data_tensor
+   object_ids = ids_tensor
+   angles     = angle_tensor
+}
 
+data[i]
+object_ids[i]
+angles[i]
+
+
+d = Dataset(Coil.load_dataset)
+]]
