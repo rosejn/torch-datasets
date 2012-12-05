@@ -8,23 +8,20 @@ require 'fn'
 require 'fn/seq'
 
 -- A dataset pipeline system, allowing for easy loading and transforming of
--- datasets.  A pipeline processes tables representing dataset samples:
+-- datasets.  A pipeline processes individual samples, which are just tables of
+-- values (numbers, tensors, strings).  The only mandatory field is data, which
+-- must be a torch.Tensor, and images should be in the form of
+-- <channels x width x height>.
 --
--- { data     = <torch.Tensor <channels x width x height>,
---   class    = class_id,
+-- e.g.
 --
---   -- if loaded from a file
---   path = 'obj2.png',
---
---   -- animations will contain additional metadata such as:
---   frame    = 9,
---   rotation = 45,
---   zoom     = 0.2
--- }
---
--- If it's an image the data property should always be a tensor which is of the
--- channels by image dimensions, so that it can be displayed and operated on
--- without having to store this information somewhere else.
+--    { data     = <torch.Tensor>,
+--      class    = class_id,
+--      path     = 'obj2__45.png',
+--      frame    = 9,
+--      rotation = 45,
+--      zoom     = 0.2
+--    }
 
 pipe = {}
 
@@ -32,6 +29,14 @@ pipe = {}
 -- pipeline functions that should all take a sample and return a sample.
 -- e.g.
 --
+--    pipe.pipeline(pipe.file_data_source(path),
+--                  pipe.image_loader,
+--                  pipe.scaler(width, height),
+--                  pipe.rgb2yuv,
+--                  pipe.normalizer,
+--                  pipe.spatial_normalizer(1, 7, 1, 1),
+--                  patch_sampler(10, 10)
+--                  )
 function pipe.pipeline(src, ...)
    local args = {...}
    return function()
