@@ -42,7 +42,7 @@ function pipe.pipeline(src, ...)
    return function()
       local next_elem = src()
       if next_elem then
-         return fn.thread(src(), unpack(args))
+         return fn.thread(next_elem, unpack(args))
       else
          return nil
       end

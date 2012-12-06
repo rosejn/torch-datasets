@@ -57,8 +57,6 @@ function TableDataset:sampler(options)
        return seq.map(fn.partial(self.sample, self), indices)
    end
 
-   local the_sampler = make_sampler()
-
    return seq.flatten(seq.cycle(seq.repeatedly(make_sampler)))
 end
 
@@ -129,3 +127,8 @@ function TableDataset:mini_batches(options)
                   indices)
 end
 
+--[[
+* get sampled animation sequences
+ - add frame # to each sample
+
+--]]
