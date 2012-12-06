@@ -68,7 +68,7 @@ end
 --
 --   -- use the test data rather than the training data:
 --   m = dataset.Mnist({test = true})
-function Mnist:__init(opts)
+function Mnist.dataset(opts)
    local scale, normalize, size, frames, rotation, translation, zoom
    --[[ TODO: dok.unpack seems broken...
 
@@ -92,7 +92,8 @@ function Mnist:__init(opts)
    rotation    = arg.optional(opts, 'rotation', {})
    translation = arg.optional(opts, 'translation', {})
    zoom        = arg.optional(opts, 'zoom', {})
-   sorted      = arg.optional(opts, 'sort', false)
+
+   local transformations = {}
 
    local data
    if test then
@@ -107,23 +108,20 @@ function Mnist:__init(opts)
       labels[i] = data[{i, 785}]
    end
 
+   samples, labels = dataset.sort_by_class(samples, labels)
+
    if normalize then
        mean, std = dataset.global_normalization(samples)
    end
 
    if (#scale > 0) then
-      dataset.scale(samples, scale[1], scale[2])
+       table.insert(transformations, pipe.scaler(scale[1], scale[2]))
    end
 
-   if sorted then
-       samples, labels = dataset.sort_by_class(samples, labels)
-   end
-
-   self.samples   = samples
-   self.labels    = labels
-   self.size      = size
-   self.frames    = frames
-   self.label_vector = torch.zeros(#Mnist.classes)
+   local d = {
+       data = samples,
+       class = labels
+   }
 
    if (#rotation > 0) or (#translation > 0) or (#zoom > 0) then
       self:_animate(rotation, translation, zoom)
@@ -179,113 +177,8 @@ function Mnist:_animate(rotation, translation, zoom)
          end
       end
    end
-
-   self.samples   = animated
-   self.labels    = animated_labels
-   self.base_size = self.size
-   self.size      = full_size
 end
 
--- Returns the specified (sample, label) pair.
---
---   sample, label = m:sample(100)
-function Mnist:sample(i)
-   return {sample = self.samples[i]:double(),
-           label  = self.labels[i]
-       }
-end
-
--- Returns an infinite sequence of data samples.  By default they
--- are shuffled (sample, label) pairs, but you can turn shuffling off.
---
---   for sample, label in seq.take(1000, m:sampler()) do
---     net:forward(sample)
---   end
---
---   -- turn off shuffling
---   sample_seq = m:sampler({shuffled = false})
-function Mnist:sampler(options)
-   options = options or {}
-   local shuffled = arg.optional(options, 'shuffled', true)
-   local indices
-
-   local function make_sampler()
-       if shuffled then
-           indices = torch.randperm(self.size)
-       else
-           indices = seq.range(self.size)
-       end
-       return seq.map(fn.partial(self.sample, self), indices)
-   end
-
-   local the_sampler = make_sampler()
-
-   return seq.flatten(seq.cycle(seq.repeatedly(make_sampler)))
-end
-
-
--- Returns the ith mini batch tuple consisting of (batch_tensor, labels_tensor) pair.
---
---   local batch, labels = m:mini_batch(1)
---
---   -- or use directly
---   net:forward(m:mini_batch(1))
---
---   -- set the batch size using an options table
---   local batch, labels = m:mini_batch(1, {size = 100})
---
---   -- or get batch as a sequence of samples, rather than a full tensor
---   for sample, label in m:mini_batch(1, {sequence = true}) do
---     net:forward(sample)
---   end
-function Mnist:mini_batch(i, options)
-   options = options or {}
-   local size   = arg.optional(options, 'size', 10)
-   local as_seq = arg.optional(options, 'sequence', false)
-
-   if as_seq then
-      return seq.map(fn.partial(self.sample, self), seq.range(i, i+size-1))
-   else
-      local batch  = self.samples:narrow(1, i, size)
-      local labels = self.labels:narrow(1, i, size)
-      return {batch   = batch,
-              labels  = labels
-             }
-   end
-end
-
--- Returns an infinite sequence of mini batches.
---
---   -- default options returns contiguous tensors of batch size 10
---   for batch, labels in m:mini_batches() do
---      net:forward(batch)
---   end
---
---   -- also possible to set the size, and/or get the batch as a sequence of
---   -- individual samples.
---   for batch in (seq.take(N_BATCHES, m:mini_batches({size = 100, sequence=true})) do
---     for sample,label in batch do
---       net:forward(sample)
---     end
---   end
---
-function Mnist:mini_batches(options)
-   options = options or {}
-   local shuffled = arg.optional(options, 'shuffled', true)
-   local mb_size = arg.optional(options, 'size', 10)
-   local indices
-
-   if shuffled then
-      indices = torch.randperm(self.size / mb_size)
-   else
-      indices = seq.range(self.size / mb_size)
-   end
-
-   return seq.map(function(i)
-                     return self:mini_batch((i-1)*mb_size+1, options)
-                  end,
-                  indices)
-end
 
 -- Returns the sequence of frames corresponding to a specific sample's animation.
 --

@@ -6,13 +6,13 @@ require 'pprint'
 
 
 function test_coil_from_images()
-   pipe.movie_player(seq.take(200, coil_images('ext/coil-100', 64, 64)), 10)
+   pipe.movie_player(seq.take(200, processed_coil_images('ext/coil-100', 64, 64)), 10)
 end
 
 
 function test_coil_mini_batches()
    local table
-   local image_data = coil_images('ext/coil-100', 64, 64)
+   local image_data = processed_coil_images('ext/coil-100', 64, 64)
 
    for i=1,2 do
       table = pipe.to_data_table(100, image_data, table)
@@ -23,6 +23,12 @@ function test_coil_mini_batches()
    end
 end
 
+function coil_animations()
+   local animation = pipe.line({pipe.rotator(math.pi / 36)})
+   local frames = pipe.animator(processed_coil_images('ext/coil-100', 64, 64), animation, 30)
+   pipe.movie_player(seq.take(200, frames))
+end
 
 --test_coil_from_images()
-test_coil_mini_batches()
+--test_coil_mini_batches()
+coil_animations()

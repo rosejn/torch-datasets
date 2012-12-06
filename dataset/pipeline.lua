@@ -25,8 +25,37 @@ require 'fn/seq'
 
 pipe = {}
 
+-- Create a processing pipeline out of a table of
+-- pipeline functions that should all take a sample and return a sample.
+-- e.g.
+--
+--   local processor =
+--    pipe.line({pipe.image_loader,
+--              pipe.scaler(width, height),
+--              pipe.rgb2yuv,
+--              pipe.normalizer,
+--              pipe.spatial_normalizer(1, 7, 1, 1),
+--              patch_sampler(10, 10)
+--              })
+--
+--   local data_stream = pipe.run(pipe.file_data_source(path), processor)
+function pipe.line(funcs)
+   return function(sample)
+      return fn.thread(sample, unpack(funcs))
+   end
+end
+
+
+-- Connect a sample source to a pipeline, returning a sample iterator.
+function pipe.connect(src, line)
+   return seq.map(line, src)
+end
+
+
 -- Create a processing pipeline that takes a data source iterator, and a list of
 -- pipeline functions that should all take a sample and return a sample.
+-- Returns a sample iterator.
+--
 -- e.g.
 --
 --    pipe.pipeline(pipe.file_data_source(path),
@@ -38,15 +67,8 @@ pipe = {}
 --                  patch_sampler(10, 10)
 --                  )
 function pipe.pipeline(src, ...)
-   local args = {...}
-   return function()
-      local next_elem = src()
-      if next_elem then
-         return fn.thread(next_elem, unpack(args))
-      else
-         return nil
-      end
-   end
+   local funcs = {...}
+   return pipe.connect(src, pipe.line(funcs))
 end
 
 
@@ -338,3 +360,120 @@ function pipe.load_from_disk(path)
 
    return n_examples, n_dimensions, tensor
 end
+
+
+function pipe.rotator(radians)
+   local rotated = torch.Tensor()
+   return function(sample)
+      rotated:resizeAs(sample.data)
+      image.rotate(rotated, sample.data, radians)
+      sample.data:copy(rotated)
+      return sample
+   end
+end
+
+
+function pipe.translator(dx, dy)
+   local translated = torch.Tensor()
+   return function(sample)
+      translated:resizeAs(sample.data)
+      image.translate(translated, sample.data, cx, cy)
+      sample.data:copy(translated)
+      return sample
+   end
+end
+
+
+function pipe.zoomer(dz)
+   local zoomed = torch.Tensor()
+
+   return function(sample)
+      local src_width  = sample.data:size()[1]
+      local src_height = sample.data:size()[2]
+      local width      = math.floor(src_width * dz)
+      local height     = math.floor(src_height * dz)
+      zoomed:resizeAs(sample.data:size(1), width, height)
+
+      image.scale(zoomed, src, width, height)
+      if factor > 1 then
+         local sx = math.floor((width - src_width) / 2)+1
+         local sy = math.floor((height - src_height) / 2)+1
+         sample.data:copy(res:sub(sx, sx+src_width-1, sy, sy+src_height-1))
+      else
+         local sx = math.floor((src_width - width) / 2)+1
+         local sy = math.floor((src_height - height) / 2)+1
+         sample.data:zero()
+         sample.data:sub(sx,  sx+width-1, sy, sy+height-1):copy(res)
+      end
+   end
+end
+
+
+function pipe.animator(src, anim_line, frames)
+   local framer = function(sample)
+      seq.map(function(i, s)
+         s.frame = i
+         return s
+      end,
+      seq.indexed(seq.iterate(anim_line, sample)))
+   end
+
+  return seq.mapcat(function(sample)
+                      return seq.take(frames, framer)
+                    end,
+                    src)
+end
+
+
+--[[
+function Mnist:_animate(rotation, translation, zoom)
+   local full_size = self.frames * self.size
+   local animated = torch.Tensor(full_size, Mnist.n_dimensions):zero()
+   local animated_labels = torch.Tensor(full_size)
+
+   for i=1,self.size do
+      for f=1,self.frames do
+         animated_labels[1 + (i-1)*self.frames + (f-1)] = self.labels[i]
+      end
+   end
+
+   for sample=1,self.size do
+      local transformers = {}
+      if (#rotation > 0) then
+         local rot_start, rot_finish = dataset.rand_pair(rotation[1], rotation[2])
+         rot_start = rot_start * math.pi / 180
+         rot_finish = rot_finish * math.pi / 180
+         local rot_delta = (rot_finish - rot_start) / self.frames
+         table.insert(transformers, dataset.rotator(rot_start, rot_delta))
+         self.rotation = rotation
+      end
+
+      if (#translation > 0) then
+         local xmin_tx, xmax_tx = dataset.rand_pair(translation[1], translation[2])
+         local ymin_tx, ymax_tx = dataset.rand_pair(translation[3], translation[4])
+         local dx = (xmax_tx - xmin_tx) / frames
+         local dy = (ymax_tx - ymin_tx) / frames
+         table.insert(transformers, dataset.translator(xmin_tx, ymin_tx, dx, dy))
+         self.translation = translation
+      end
+
+      if (#zoom > 0) then
+         local zoom_start, zoom_finish = dataset.rand_pair(zoom[1], zoom[2])
+         local zoom_delta = (zoom_finish - zoom_start) / self.frames
+         table.insert(transformers, dataset.zoomer(zoom_start, zoom_delta))
+         self.zoom = zoom
+      end
+
+      local src = self.samples[sample]:unfold(1, 28, 28)
+      for f=1,self.frames do
+         local dst = animated:narrow(1, (sample-1)*self.frames + f, 1):select(1,1):unfold(1, 28, 28)
+         local tsrc = src
+         for _, transform in ipairs(transformers) do
+            transform(tsrc, dst)
+            tsrc = dst
+         end
+      end
+   end
+end
+
+--]]

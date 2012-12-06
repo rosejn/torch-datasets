@@ -55,7 +55,7 @@ function Coil.image_paths(dir)
 end
 
 
-local function processed_coil_images(dir, width, height)
+function processed_coil_images(dir, width, height)
    return pipe.pipeline(Coil.image_paths(dir),
                         coil_metadata_extractor,
                         pipe.image_loader,
