@@ -195,7 +195,7 @@ function pipe.spatial_normalizer(channel, radius, threshold, thresval)
    return function(sample)
       if sample == nil then return nil end
 
-      sample.data = normalizer:forward(sample.data[{{channel},{},{}}]:float())
+      sample.data[{{channel},{},{}}]:copy(normalizer:forward(sample.data[{{channel},{},{}}]:float()))
       return sample
    end
 end

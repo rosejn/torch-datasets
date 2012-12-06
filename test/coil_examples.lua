@@ -6,7 +6,7 @@ require 'pprint'
 
 
 function test_coil_from_images()
-   pipe.movie_player(seq.take(200, processed_coil_images('ext/coil-100', 64, 64)), 10)
+   pipe.movie_player(seq.take(200, processed_coil_images('ext/coil-100', 64, 64)), 30)
 end
 
 
@@ -29,6 +29,6 @@ function coil_animations()
    pipe.movie_player(seq.take(200, frames))
 end
 
---test_coil_from_images()
+test_coil_from_images()
 --test_coil_mini_batches()
-coil_animations()
+--coil_animations()

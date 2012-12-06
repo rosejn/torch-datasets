@@ -26,7 +26,7 @@ Coil.file         = 'coil-100.t7'
 -- Parse a coil file path and return a table of metadata with the image number
 -- and angle of the object.
 local function coil_metadata_extractor(sample)
-   _, _, img, angle = string.find(sample.filename, "obj(%d+)__(%d+).ppm")
+   _, _, img, angle = string.find(sample.filename, "obj(%d+)__(%d+).png")
    img   = tonumber(img)
 
    sample.image = img
@@ -62,8 +62,8 @@ function processed_coil_images(dir, width, height)
                         pipe.scaler(width, height),
                         pipe.rgb2yuv,
                         pipe.normalizer,
-                        pipe.spatial_normalizer(1, 7, 1, 1),
-                        pipe.remove_keys('filename', 'path', 'width', 'height')
+                        pipe.spatial_normalizer(1, 7, 1, 1)
+                        --pipe.remove_keys('filename', 'path', 'width', 'height')
                         --pipe.patch_sampler(10, 10)
                         )
 end
