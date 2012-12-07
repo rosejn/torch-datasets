@@ -79,14 +79,15 @@ function pipe.file_seq(dir)
 end
 
 
--- Returns a list of files located in dir for which string.find will match
+-- Returns a seq of files located in dir for which string.find will match
 -- the expression ex.
 local function matching_file_seq(dir, ex)
    return seq.filter(function(name) return string.find(name, ex) end,
                      pipe.file_seq(dir))
 end
 
-
+-- Maps a seq of files into a seq of tables with filename and path
+-- properties set.
 local function path_seq(dir, files)
    return seq.map(function(filename)
       return {
@@ -106,7 +107,9 @@ function pipe.matching_paths(dir, suffix)
 end
 
 
-function pipe.image_paths(dir)
+-- Returns a sequence of tables representing images in a directory, where
+-- each table has the path and filename properties.
+function pipe.image_dir_source(dir)
    local files = pipe.file_seq(dir)
 
    local images = seq.filter(function(path)
@@ -202,7 +205,7 @@ function pipe.spatial_normalizer(channel, radius, threshold, thresval)
 end
 
 
-
+-- Divides each sample.data by n.
 function pipe.div(n)
    local factor = 1.0 / n
    return function(sample)
@@ -212,7 +215,7 @@ function pipe.div(n)
 end
 
 
--- Subtract the mean and divide by the std.
+-- Subtracts the mean and divides by the std for sample.data.
 function pipe.normalizer(sample)
    local mean = sample.data:mean()
    local std  = sample.data:std()

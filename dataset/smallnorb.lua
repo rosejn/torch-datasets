@@ -50,7 +50,7 @@ end
 
 
 
---[[ Split metadata into separate fields 
+--[[ Split metadata into separate fields
 
 The fields are:
 
@@ -91,7 +91,7 @@ local function data(files, opt)
 
 	local pipeline = pipe.pipeline(unpack(stages))
 	local table = pipe.to_data_table(SmallNorb.size/2, pipeline)
-	
+
 	return dataset.TableDataset(table)
 end
 

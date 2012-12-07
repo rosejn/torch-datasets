@@ -11,9 +11,10 @@ require 'util/arg'
 local arg = util.arg
 
 require 'dataset'
-require 'debugger'
+require 'dataset/table_dataset'
 
-local Mnist = torch.class("dataset.Mnist")
+Mnist = {}
+
 Mnist.name         = 'mnist'
 Mnist.dimensions   = {1, 28, 28}
 Mnist.n_dimensions = 1 * 28 * 28
@@ -123,12 +124,17 @@ function Mnist.dataset(opts)
        class = labels
    }
 
+   --[[
    if (#rotation > 0) or (#translation > 0) or (#zoom > 0) then
       self:_animate(rotation, translation, zoom)
    end
+   --]]
+
+   return dataset.TableDataset(d)
 end
 
 
+--[[
 function Mnist:_animate(rotation, translation, zoom)
    local full_size = self.frames * self.size
    local animated = torch.Tensor(full_size, Mnist.n_dimensions):zero()
@@ -221,4 +227,4 @@ function Mnist:animations(options)
                   indices)
 end
 
-
+--]]

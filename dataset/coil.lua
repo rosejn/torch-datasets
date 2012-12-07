@@ -21,7 +21,15 @@ Coil.dimensions   = {1, 128, 128}
 Coil.n_dimensions = 3 * 128 * 128
 Coil.size         = 7200
 Coil.url          = 'http://www.cs.columbia.edu/CAVE/databases/SLAM_coil-20_coil-100/coil-100/coil-100.zip'
-Coil.file         = 'coil-100.t7'
+Coil.file         = 'coil-100'
+
+
+local function coil_image_dir()
+	local function unzip(filename) os.execute('gunzip ' .. Coil.file) end
+	local image_dir = dataset.data_path(Coil.name, Coil.url, Coil.file, unzip)
+   return image_dir
+end
+
 
 -- Parse a coil file path and return a table of metadata with the image number
 -- and angle of the object.
@@ -36,8 +44,9 @@ local function coil_metadata_extractor(sample)
    return sample
 end
 
+
 -- Returns a sequence of tables representing the coil images sorted by image number and angle.
-function Coil.image_paths(dir)
+local function image_paths(dir)
    local files = pipe.matching_paths(dir, 'obj')
    local file_maps = seq.table(seq.map(coil_metadata_extractor, files))
    local numerical_order = function(a, b)
@@ -55,7 +64,12 @@ function Coil.image_paths(dir)
 end
 
 
-function Coil.default_pipeline(dir, width, height)
+-- Returns a sequence of processed Coil images as samples of width x height
+-- size.
+function Coil.pipeline(width, height)
+   width  = width or Coil.dimensions[2]
+   height = height or Coil.dimensions[3]
+
    local line = pipe.line({coil_metadata_extractor,
                            pipe.image_loader,
                            pipe.scaler(width, height),
@@ -63,16 +77,24 @@ function Coil.default_pipeline(dir, width, height)
                            pipe.normalizer,
                            pipe.spatial_normalizer(1, 7, 1, 1),
                            pipe.remove_keys('filename', 'path', 'width', 'height'),
-                        })
-   return pipe.connect(Coil.image_paths(dir), line)
+                           function(sample)
+                              sample.frame = (sample.angle / 5) + 1
+                              return sample
+                           end,
+                          })
+
+   local image_dir = coil_image_dir()
+   return pipe.connect(image_paths(image_dir), line)
 end
 
 
-function Coil.dataset(dir, width, height)
-   width = width or 32
-   height = height or width
-   local pipeline = Coil.default_pipeline(dir, width, height)
-   local table = pipe.to_data_table(Coil.size, pipeline)
+-- Returns a TableDataset for Coil with each sample of size 3 x width x height,
+-- in a normalized YUV color format.
+function Coil.dataset(width, height)
+   local pipeline = Coil.pipeline(width, height)
+   local table     = pipe.to_data_table(Coil.size, pipeline)
 
    return dataset.TableDataset(table)
 end
+
+
