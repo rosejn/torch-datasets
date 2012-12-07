@@ -205,7 +205,7 @@ function pipe.spatial_normalizer(channel, radius, threshold, thresval)
 end
 
 
--- Divides each sample.data by n.
+-- Divides sample.data values by a constant factor
 function pipe.div(n)
    local factor = 1.0 / n
    return function(sample)
@@ -487,6 +487,17 @@ end
 function pipe.data_table_source(table)
    local dataset = dataset.TableDataset(table)
    return dataset:sampler({shuffled = false})
+end
+
+
+-- Filter a sequence based on some field
+function pipe.filter(source, field, value)
+   return seq.filter(
+      function(sample)
+         return sample[field] == value
+      end,
+      source
+   )
 end
 
 

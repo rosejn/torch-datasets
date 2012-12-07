@@ -5,6 +5,8 @@ require 'logroll'
 
 local log = logroll.print_logger()
 
+local arg = require 'util/arg'
+
 local bit = require 'bit'
 local lshift, bor = bit.lshift, bit.bor
 
@@ -21,8 +23,7 @@ SmallNorb.name           = 'smallnorb'
 SmallNorb.dimensions     = {1, 96, 96}
 SmallNorb.n_dimensions   = 1 * 96 * 96
 SmallNorb.size           = 2 * 24300
-
-SmallNorb.classes        = {'animal', 'human', 'airplane', 'truck', 'car', 'none'}
+SmallNorb.classes        = {'animal', 'human', 'airplane', 'truck', 'car'}
 
 -- The small NORB dataset is spread over six zip files from the following location
 SmallNorb.url            = 'http://www.cs.nyu.edu/~ylclab/data/norb-v1.0-small/'
@@ -71,37 +72,175 @@ end
 
 
 
+local function normalize(enabled)
+	return function(stages)
+		if enabled then
+			table.insert(stages, pipe.normalize)
+		else
+			return stages
+		end
+	end
+end
+
+
+
+local function downsample(factor)
+	return function(stages)
+		if factor ~= nil then
+			local width = SmallNorb.dimensions[3] / factor
+			local height = SmallNorb.dimensions[2] / factor
+			table.insert(stages, pipe.scaler(width, height))
+			return stages
+		else
+			return stages
+		end
+	end
+end
+
+
+
+local function process_pairs(pair_format)
+
+	local function half(n)
+		return function(sample) sample.data = sample.data[n] return sample end
+	end
+
+	return function(stages)
+		if pair_format == 'combined' then
+			-- The data already comes in combined form
+		elseif pair_format == 'left' then
+			table.insert(stages, half(1))
+		elseif pair_format == 'right' then
+			table.insert(stages, half(2))
+		else
+			error("unknown 'pairs' argument " .. pair_format)
+		end
+		return stages
+	end
+end
+
+
+
+-- Invert table
+local function invert(table)
+	local ret = {}
+	for k,v in pairs(table) do
+		ret[v] = k	
+	end
+	return ret
+end
+
+
+
+-- Return a numerical class id from a class description that's either a string or an id 
+local function class_id(class)
+	if type(class) == 'number' then
+		if class < 0 or class > 4 then
+			error('invalid NORB class id. 0 =< id =< 4') 
+		end
+		return class
+	else
+		return invert(SmallNorb.classes)[class]-1
+	end
+end
+
+
+local function filter(val, field, transform)
+	transform = transform or fn.id
+	return function(source)
+		if val then
+			local newval = transform(val)
+			return pipe.filter(source, field, newval)
+		else
+			return source
+		end
+	end
+end
+
+
+
+--[[
+
+Parameters:
+
+* n_frames (unsigned) :
+	number of frames to return
+* pairs (optional string : ('combined' | 'left' | 'right'):
+	How should stereo pairs be loaded? 'combined' returns the two sub-images in each example,
+	'left' and 'right' return only one half of the images.
+* downsample (optional unsigned >= 1):
+	downsample by some constant factor
+* normalise (optional bool) :
+* class (number or string) :
+	restrict dataset to the given object class
+* instance (number) :
+	restrict dataset to the given object instance
+* elevation (number) :
+	restrict dataset to objects with the given elevation
+* azimuth (number) :
+	restrict dataset to objects with the given azimuth
+* lighting (number) :
+	restrict dataset to objects with the given lighting
+
+--]]
 local function data(files, opt)
 
-	-- TODO: either combine pairs into one, keep both, keep left, keep right
-	-- TODO: grab subset for each class
-	-- TODO: have a standard option to get only 'n' images
+	opt = opt or {}
+
+	local n_frames          = arg.optional(opt, 'n_frames', SmallNorb.size/2)
+	local pair_format       = arg.optional(opt, 'pairs', 'combined')
+	local class             = arg.optional(opt, 'class')
+	local downsample_factor = arg.optional(opt, 'downsample')
+	local do_normalize      = arg.optional(opt, 'normalize', false)
+	local instance          = arg.optional(opt, 'instance')
+	local elevation         = arg.optional(opt, 'elevation')
+	local azimuth           = arg.optional(opt, 'azimuth')
+	local lighting          = arg.optional(opt, 'lighting')
 
 	local raw = util.merge(
 		split_metadata(raw_data(files.info)),
 		{
-			data    = raw_data(files.dat):double(),
+			data    = raw_data(files.dat):float(),
 			classes = raw_data(files.cat)
 		}
 	)
-	local stages = {
+
+	collectgarbage()
+
+	-- TODO: verify that arguments are valid
+	local source = fn.thread(
 		pipe.data_table_source(raw),
-		pipe.div(256) -- always normalise to range [0, 1]
-	}
+		filter(class, 'classes', class_id),
+		filter(instance, 'instance'),
+		filter(elevation, 'elevation'),
+		filter(azimuth, 'azimuth'),
+		filter(lighting, 'lighting')
+	)
+
+	local stages = fn.thread({
+			source,
+			pipe.div(256) -- always normalise to range [0, 1]
+		},
+		process_pairs(pair_format),
+		downsample(downsample_factor),
+		normalize(do_normalize)
+	)
 
 	local pipeline = pipe.pipeline(unpack(stages))
-	local table = pipe.to_data_table(SmallNorb.size/2, pipeline)
-
+	local table = pipe.to_data_table(n_frames, pipeline)
 	return dataset.TableDataset(table)
 end
 
 
 
+-- see SmallNorb.data
 function SmallNorb.test_data(opt)
 	return data(SmallNorb.testing_files, opt)
 end
 
 
+
+-- see SmallNorb.data
 function SmallNorb.train_data(opt)
 	return data(SmallNorb.training_files, opt)
 end
