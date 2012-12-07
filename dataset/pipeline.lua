@@ -203,6 +203,7 @@ end
 
 
 
+-- Divide image values by a constant factor
 function pipe.div(n)
    local factor = 1.0 / n
    return function(sample)

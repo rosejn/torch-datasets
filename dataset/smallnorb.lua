@@ -73,6 +73,34 @@ end
 
 
 
+--[[ Add standard pipeline stages
+
+Optional parameters:
+
+* downsample : downsample by some constant factor
+* normalise
+
+--]]
+function standard_options(opts, stages)
+
+	local downsample = arg.optional(opts, 'downsample', 0)
+	local normalize  = arg.optional(opts, 'normalize', false)
+
+	if normalize then
+		table.insert(stages, pipe.normalize)
+	end
+
+	if downsample then
+		local width = SmallNorb.dimensions[3] / downsample
+		local height = SmallNorb.dimensions[2] / downsample
+		table.insert(stages, pipe.scaler(width, height))
+	end
+
+	return stages
+end
+
+
+
 local function process_pairs(pair_format, stages)
 
 	local function half(n)
@@ -121,10 +149,12 @@ local function data(files, opt)
 
 	collectgarbage()
 
-	local stages = process_pairs(pair_format, {
-		pipe.data_table_source(raw),
-		pipe.div(256) -- always normalise to range [0, 1]
-	})
+	local stages = standard_options(opt,
+		process_pairs(pair_format, {
+			pipe.data_table_source(raw),
+			pipe.div(256) -- always normalise to range [0, 1]
+		})
+	)
 
 	local pipeline = pipe.pipeline(unpack(stages))
 	local table = pipe.to_data_table(n_frames, pipeline)
