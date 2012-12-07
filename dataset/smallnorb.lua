@@ -23,8 +23,7 @@ SmallNorb.name           = 'smallnorb'
 SmallNorb.dimensions     = {1, 96, 96}
 SmallNorb.n_dimensions   = 1 * 96 * 96
 SmallNorb.size           = 2 * 24300
-
-SmallNorb.classes        = {'animal', 'human', 'airplane', 'truck', 'car', 'none'}
+SmallNorb.classes        = {'animal', 'human', 'airplane', 'truck', 'car'}
 
 -- The small NORB dataset is spread over six zip files from the following location
 SmallNorb.url            = 'http://www.cs.nyu.edu/~ylclab/data/norb-v1.0-small/'
@@ -83,7 +82,7 @@ Optional parameters:
 --]]
 function standard_options(opts, stages)
 
-	local downsample = arg.optional(opts, 'downsample', 0)
+	local downsample = arg.optional(opts, 'downsample')
 	local normalize  = arg.optional(opts, 'normalize', false)
 
 	if normalize then
@@ -120,24 +119,63 @@ local function process_pairs(pair_format, stages)
 end
 
 
+-- Invert table
+local function invert(table)
+	local ret = {}
+	for k,v in pairs(table) do
+		ret[v] = k	
+	end
+	return ret
+end
+
+
+
+-- Return a numerical class id from a class description that's either a string or an id 
+local function class_id(class)
+	if type(class) == 'number' then
+		if class < 0 or class > 4 then
+			error('invalid NORB class id. 0 =< id =< 4') 
+		end
+		return class
+	else
+		return invert(SmallNorb.classes)[class]-1
+	end
+end
+
+
+
 --[[
 
 Parameters:
 
-* n_frames (unsigned) : number of frames to return
+* n_frames (unsigned) :
+	number of frames to return
 * pairs (optional string : ('combined' | 'left' | 'right'):
 	How should stereo pairs be loaded? 'combined' returns the two sub-images in each example,
 	'left' and 'right' return only one half of the images.
+* class (number or string) :
+	restrict dataset to the given object class
+* instance (number) :
+	restrict dataset to the given object instance
+* elevation (number) :
+	restrict dataset to objects with the given elevation
+* azimuth (number) :
+	restrict dataset to objects with the given azimuth
+* lighting (number) :
+	restrict dataset to objects with the given lighting
 
 --]]
 local function data(files, opt)
 
 	opt = opt or {}
 
-	local n_frames = arg.optional(opt, 'n_frames', SmallNorb.size/2)
+	local n_frames    = arg.optional(opt, 'n_frames', SmallNorb.size/2)
 	local pair_format = arg.optional(opt, 'pairs', 'combined')
-
-	-- TODO: grab subset for each class
+	local class       = arg.optional(opt, 'class')
+	local instance    = arg.optional(opt, 'instance')
+	local elevation   = arg.optional(opt, 'elevation')
+	local azimuth     = arg.optional(opt, 'azimuth')
+	local lighting    = arg.optional(opt, 'lighting')
 
 	local raw = util.merge(
 		split_metadata(raw_data(files.info)),
@@ -149,9 +187,31 @@ local function data(files, opt)
 
 	collectgarbage()
 
+	local function filter(val, field, transform)
+		transform = transform or fn.id
+		return function(source)
+			if val then
+				local newval = transform(val)
+				return pipe.filter(source, field, newval)
+			else
+				return source
+			end
+		end
+	end
+
+	-- TODO: verify that arguments are valid
+	local source = fn.thread(
+		pipe.data_table_source(raw),
+		filter(class, 'classes', class_id),
+		filter(instance, 'instance'),
+		filter(elevation, 'elevation'),
+		filter(azimuth, 'azimuth'),
+		filter(lighting, 'lighting')
+	)
+
 	local stages = standard_options(opt,
 		process_pairs(pair_format, {
-			pipe.data_table_source(raw),
+			source,
 			pipe.div(256) -- always normalise to range [0, 1]
 		})
 	)

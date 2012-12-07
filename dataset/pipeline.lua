@@ -488,6 +488,17 @@ function pipe.data_table_source(table)
 end
 
 
+-- Filter a sequence based on some field
+function pipe.filter(source, field, value)
+   return seq.filter(
+      function(sample)
+         return sample[field] == value
+      end,
+      source
+   )
+end
+
+
 -- Write a pipeline to disk.
 function pipe.write_to_disk(path, src, metadata)
    metadata = metadata or {}
