@@ -6,6 +6,7 @@ require 'pprint'
 require 'util'
 require 'fn'
 require 'fn/seq'
+require 'dataset/table_dataset'
 
 -- A dataset pipeline system, allowing for easy loading and transforming of
 -- datasets.  A pipeline processes individual samples, which are just tables of
@@ -196,6 +197,16 @@ function pipe.spatial_normalizer(channel, radius, threshold, thresval)
       if sample == nil then return nil end
 
       sample.data[{{channel},{},{}}]:copy(normalizer:forward(sample.data[{{channel},{},{}}]:float()))
+      return sample
+   end
+end
+
+
+
+function pipe.div(n)
+   local factor = 1.0 / n
+   return function(sample)
+      sample.data:mul(factor)
       return sample
    end
 end
@@ -471,7 +482,7 @@ end
 
 -- Turn a data table into a pipeline source, producing samples.
 function pipe.data_table_source(table)
-   local dataset = TableDataset(table)
+   local dataset = dataset.TableDataset(table)
    return dataset:sampler({shuffled = false})
 end
 
