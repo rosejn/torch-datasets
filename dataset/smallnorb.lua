@@ -8,10 +8,11 @@ local log = logroll.print_logger()
 local bit = require 'bit'
 local lshift, bor = bit.lshift, bit.bor
 
--- package.path = '?/init.lua;' .. package.path
+package.path = '?/init.lua;' .. package.path
 
 require 'dataset'
 require 'dataset/pipeline'
+require 'dataset/lushio'
 
 
 SmallNorb = {}
@@ -40,89 +41,11 @@ SmallNorb.testing_files  = {
 
 
 
---[[ Convert a binary matrix (in a file) to a Torch tensor --]]
-local function binary_matrix_to_torch(filename)
-
-	local f = assert(io.open(filename, 'rb'))
-
-	local function byte(str, pos)
-		return string.byte(str, pos)
-	end
-
-	local function int32(str, pos)
-		local b0, b1, b2, b3 = string.byte(str, pos, pos+4)
-		return bor(lshift(b3,24), lshift(b2,16), lshift(b1,8), lshift(b0,0))
-	end
-
-	-- Magic numbers etc. described at http://www.cs.nyu.edu/~ylclab/data/norb-v1.0-small
-	decoder = {}
-	decoder[0x1e3d4c55] = { torch.ByteTensor , byte , 1 }
-	decoder[0x1e3d4c54] = { torch.IntTensor  , int32, 4 }
-
-	local header = f:read(4+4+16)
-	local magic = int32(header, 1)
-	local ndim = int32(header, 1+4)
-	local dim = {}
-
-	for i = 1,ndim do
-		dim[i] = int32(header, 1+4+i*4) 
-	end
-
-	local tensor, convert, wordsize = unpack(decoder[magic])
-
-	local ret = tensor(unpack(dim))
-	local header_size = 8 + 4 * math.max(3,ndim)
-	f:seek('set', header_size)
-
-	local function read_row(t, n_words)
-		local bytes = f:read(n_words * wordsize)
-		for i = 1,n_words do
-			ret[i] = convert(bytes, 1+(i-1)*wordsize)
-		end
-	end
-
-	log.info('Converting to Torch format')
-	if ndim == 1 then
-		read_row(ret, dim[1])
-	elseif ndim == 2 then
-		for i = 1,dim[1] do
-			xlua.progress(i, dim[1])
-			read_row(ret[i], dim[2])
-		end
-	elseif ndim == 4 then
-		for i = 1,dim[1] do
-			xlua.progress(i, dim[1])
-			for j = 1,dim[2] do
-				for k = 1,dim[3] do
-					read_row(ret[i][j][k], dim[4])
-				end
-			end
-		end
-	end
-
-	f:close()
-	collectgarbage()
-
-	return ret
-end
-
-
-
 --[[ Get a single matrix from NORB in torch format --]]
-local function raw_data(filename)
-
+local function raw_data(filename, toTensor)
 	local function unzip(filename) os.execute('gunzip ' .. filename) end
-
-	local local_path = paths.concat(dataset.data_dir, SmallNorb.name, filename .. '.th7')
-
-	if is_file(local_path) then
-		return torch.load(local_path)
-	else
-		local bin_matrix = dataset.data_path(SmallNorb.name, SmallNorb.url .. filename .. '.gz', filename, unzip)
-		local th_matrix = binary_matrix_to_torch(bin_matrix)
-		torch.save(local_path, th_matrix)
-		return th_matrix
-	end
+	local bin_matrix = dataset.data_path(SmallNorb.name, SmallNorb.url .. filename .. '.gz', filename, unzip)
+	return lushio.read(bin_matrix)
 end
 
 
@@ -137,7 +60,7 @@ The fields are:
 * the lighting condition (0 to 5)
 
 --]]
-function SmallNorb.split_metadata(metadata)
+local function split_metadata(metadata)
 	return {
 		instance  = metadata:select(2,1),
 		elevation = metadata:select(2,2),
@@ -148,23 +71,40 @@ end
 
 
 
-function SmallNorb.dataset(files)
-	return util.merge(
-		SmallNorb.split_metadata(raw_data(files.info)), 
+local function data(files, opt)
+
+	-- TODO: either combine pairs into one, keep both, keep left, keep right
+	-- TODO: grab subset for each class
+	-- TODO: have a standard option to get only 'n' images
+
+	local raw = util.merge(
+		split_metadata(raw_data(files.info)),
 		{
-			data    = raw_data(files.dat),
+			data    = raw_data(files.dat):double(),
 			classes = raw_data(files.cat)
 		}
 	)
+	local stages = {
+		pipe.data_table_source(raw),
+		pipe.div(256) -- always normalise to range [0, 1]
+	}
+
+	local pipeline = pipe.pipeline(unpack(stages))
+	local table = pipe.to_data_table(SmallNorb.size/2, pipeline)
+	
+	return dataset.TableDataset(table)
 end
 
 
-function SmallNorb.test_data()  return SmallNorb.dataset(SmallNorb.testing_files ) end
-function SmallNorb.train_data() return SmallNorb.dataset(SmallNorb.training_files) end
+
+function SmallNorb.test_data(opt)
+	return data(SmallNorb.testing_files, opt)
+end
 
 
--- TODO: Pipeline:
--- convert to float data and scale appropriately
--- (possibly) resize 
+function SmallNorb.train_data(opt)
+	return data(SmallNorb.training_files, opt)
+end
+
 
 return SmallNorb
