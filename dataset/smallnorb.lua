@@ -87,9 +87,10 @@ end
 local function downsample(factor)
 	return function(stages)
 		if factor ~= nil then
-			local width = SmallNorb.dimensions[3] / downsample
-			local height = SmallNorb.dimensions[2] / downsample
+			local width = SmallNorb.dimensions[3] / factor
+			local height = SmallNorb.dimensions[2] / factor
 			table.insert(stages, pipe.scaler(width, height))
+			return stages
 		else
 			return stages
 		end
