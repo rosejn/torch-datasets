@@ -11,7 +11,6 @@ require 'util/arg'
 local arg = util.arg
 
 require 'dataset'
-require 'debugger'
 
 local Mnist = torch.class("dataset.Mnist")
 Mnist.name         = 'mnist'
