@@ -72,51 +72,52 @@ end
 
 
 
---[[ Add standard pipeline stages
-
-Optional parameters:
-
-* downsample : downsample by some constant factor
-* normalise
-
---]]
-function standard_options(opts, stages)
-
-	local downsample = arg.optional(opts, 'downsample')
-	local normalize  = arg.optional(opts, 'normalize', false)
-
-	if normalize then
-		table.insert(stages, pipe.normalize)
+local function normalize(enabled)
+	return function(stages)
+		if enabled then
+			table.insert(stages, pipe.normalize)
+		else
+			return stages
+		end
 	end
-
-	if downsample then
-		local width = SmallNorb.dimensions[3] / downsample
-		local height = SmallNorb.dimensions[2] / downsample
-		table.insert(stages, pipe.scaler(width, height))
-	end
-
-	return stages
 end
 
 
 
-local function process_pairs(pair_format, stages)
+local function downsample(factor)
+	return function(stages)
+		if factor ~= nil then
+			local width = SmallNorb.dimensions[3] / downsample
+			local height = SmallNorb.dimensions[2] / downsample
+			table.insert(stages, pipe.scaler(width, height))
+		else
+			return stages
+		end
+	end
+end
+
+
+
+local function process_pairs(pair_format)
 
 	local function half(n)
 		return function(sample) sample.data = sample.data[n] return sample end
 	end
 
-	if pair_format == 'combined' then
-		-- The data already comes in combined form
-	elseif pair_format == 'left' then
-		table.insert(stages, half(1))
-	elseif pair_format == 'right' then
-		table.insert(stages, half(2))
-	else
-		error("unknown 'pairs' argument " .. pair_format)
+	return function(stages)
+		if pair_format == 'combined' then
+			-- The data already comes in combined form
+		elseif pair_format == 'left' then
+			table.insert(stages, half(1))
+		elseif pair_format == 'right' then
+			table.insert(stages, half(2))
+		else
+			error("unknown 'pairs' argument " .. pair_format)
+		end
+		return stages
 	end
-	return stages
 end
+
 
 
 -- Invert table
@@ -143,6 +144,19 @@ local function class_id(class)
 end
 
 
+local function filter(val, field, transform)
+	transform = transform or fn.id
+	return function(source)
+		if val then
+			local newval = transform(val)
+			return pipe.filter(source, field, newval)
+		else
+			return source
+		end
+	end
+end
+
+
 
 --[[
 
@@ -153,6 +167,9 @@ Parameters:
 * pairs (optional string : ('combined' | 'left' | 'right'):
 	How should stereo pairs be loaded? 'combined' returns the two sub-images in each example,
 	'left' and 'right' return only one half of the images.
+* downsample (optional unsigned >= 1):
+	downsample by some constant factor
+* normalise (optional bool) :
 * class (number or string) :
 	restrict dataset to the given object class
 * instance (number) :
@@ -169,13 +186,15 @@ local function data(files, opt)
 
 	opt = opt or {}
 
-	local n_frames    = arg.optional(opt, 'n_frames', SmallNorb.size/2)
-	local pair_format = arg.optional(opt, 'pairs', 'combined')
-	local class       = arg.optional(opt, 'class')
-	local instance    = arg.optional(opt, 'instance')
-	local elevation   = arg.optional(opt, 'elevation')
-	local azimuth     = arg.optional(opt, 'azimuth')
-	local lighting    = arg.optional(opt, 'lighting')
+	local n_frames          = arg.optional(opt, 'n_frames', SmallNorb.size/2)
+	local pair_format       = arg.optional(opt, 'pairs', 'combined')
+	local class             = arg.optional(opt, 'class')
+	local downsample_factor = arg.optional(opt, 'downsample')
+	local do_normalize      = arg.optional(opt, 'normalize', false)
+	local instance          = arg.optional(opt, 'instance')
+	local elevation         = arg.optional(opt, 'elevation')
+	local azimuth           = arg.optional(opt, 'azimuth')
+	local lighting          = arg.optional(opt, 'lighting')
 
 	local raw = util.merge(
 		split_metadata(raw_data(files.info)),
@@ -187,18 +206,6 @@ local function data(files, opt)
 
 	collectgarbage()
 
-	local function filter(val, field, transform)
-		transform = transform or fn.id
-		return function(source)
-			if val then
-				local newval = transform(val)
-				return pipe.filter(source, field, newval)
-			else
-				return source
-			end
-		end
-	end
-
 	-- TODO: verify that arguments are valid
 	local source = fn.thread(
 		pipe.data_table_source(raw),
@@ -209,11 +216,13 @@ local function data(files, opt)
 		filter(lighting, 'lighting')
 	)
 
-	local stages = standard_options(opt,
-		process_pairs(pair_format, {
+	local stages = fn.thread({
 			source,
 			pipe.div(256) -- always normalise to range [0, 1]
-		})
+		},
+		process_pairs(pair_format),
+		downsample(downsample_factor),
+		normalize(do_normalize)
 	)
 
 	local pipeline = pipe.pipeline(unpack(stages))
@@ -224,11 +233,14 @@ end
 
 
 
+-- see SmallNorb.data
 function SmallNorb.test_data(opt)
 	return data(SmallNorb.testing_files, opt)
 end
 
 
+
+-- see SmallNorb.data
 function SmallNorb.train_data(opt)
 	return data(SmallNorb.training_files, opt)
 end
