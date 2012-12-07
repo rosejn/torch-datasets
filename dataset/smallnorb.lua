@@ -5,6 +5,8 @@ require 'logroll'
 
 local log = logroll.print_logger()
 
+local arg = require 'util/arg'
+
 local bit = require 'bit'
 local lshift, bor = bit.lshift, bit.bor
 
@@ -71,26 +73,61 @@ end
 
 
 
+local function process_pairs(pair_format, stages)
+
+	local function half(n)
+		return function(sample) sample.data = sample.data[n] return sample end
+	end
+
+	if pair_format == 'combined' then
+		-- The data already comes in combined form
+	elseif pair_format == 'left' then
+		table.insert(stages, half(1))
+	elseif pair_format == 'right' then
+		table.insert(stages, half(2))
+	else
+		error("unknown 'pairs' argument " .. pair_format)
+	end
+	return stages
+end
+
+
+--[[
+
+Parameters:
+
+* n_frames (unsigned) : number of frames to return
+* pairs (optional string : ('combined' | 'left' | 'right'):
+	How should stereo pairs be loaded? 'combined' returns the two sub-images in each example,
+	'left' and 'right' return only one half of the images.
+
+--]]
 local function data(files, opt)
 
-	-- TODO: either combine pairs into one, keep both, keep left, keep right
+	opt = opt or {}
+
+	local n_frames = arg.optional(opt, 'n_frames', SmallNorb.size/2)
+	local pair_format = arg.optional(opt, 'pairs', 'combined')
+
 	-- TODO: grab subset for each class
-	-- TODO: have a standard option to get only 'n' images
 
 	local raw = util.merge(
 		split_metadata(raw_data(files.info)),
 		{
-			data    = raw_data(files.dat):double(),
+			data    = raw_data(files.dat):float(),
 			classes = raw_data(files.cat)
 		}
 	)
-	local stages = {
+
+	collectgarbage()
+
+	local stages = process_pairs(pair_format, {
 		pipe.data_table_source(raw),
 		pipe.div(256) -- always normalise to range [0, 1]
-	}
+	})
 
 	local pipeline = pipe.pipeline(unpack(stages))
-	local table = pipe.to_data_table(SmallNorb.size/2, pipeline)
+	local table = pipe.to_data_table(n_frames, pipeline)
 	
 	return dataset.TableDataset(table)
 end
