@@ -26,12 +26,28 @@ Mnist.file         = 'mnist-th7/train.th7'
 Mnist.test_file    = 'mnist-th7/test.th7'
 Mnist.test_size    = 10000
 
+local function load_data_file(path, n)
+    local f = torch.DiskFile(path, 'r')
+    f:binary()
+
+    local n_examples   = f:readInt()
+    local n_dimensions = f:readInt()
+
+    if n then
+        n_examples = n
+    end
+    local tensor       = torch.Tensor(n_examples, n_dimensions)
+    tensor:storage():copy(f:readFloat(n_examples * n_dimensions))
+
+    return n_examples, n_dimensions, tensor
+end
+
 -- Get the raw, unprocessed dataset.
 -- Returns a 60,000 x 785 tensor, where each image is 28*28 = 784 values in the
 -- range [0-255], and the 785th element is the class ID.
 function Mnist.raw_data(n)
    local path = dataset.data_path(Mnist.name, Mnist.url, Mnist.file)
-   local n_examples, n_dimensions, data = dataset.load_data_file(path, n)
+   local n_examples, n_dimensions, data = load_data_file(path, n)
    return data
 end
 
@@ -41,7 +57,7 @@ end
 -- described above.
 function Mnist.raw_test_data(n)
    local path = dataset.data_path(Mnist.name, Mnist.url, Mnist.test_file)
-   local n_examples, n_dimensions, data = dataset.load_data_file(path, n)
+   local n_examples, n_dimensions, data = load_data_file(path, n)
    return data
 end
 
@@ -115,8 +131,9 @@ function Mnist.dataset(opts)
        mean, std = dataset.global_normalization(samples)
    end
 
-   if (#scale > 0) then
-       table.insert(transformations, pipe.scaler(scale[1], scale[2]))
+   if (#scale == 2) then
+       dataset.scale(samples, scale[1], scale[2])
+       --table.insert(transformations, pipe.scaler(scale[1], scale[2]))
    end
 
    local d = {
