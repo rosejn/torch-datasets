@@ -6,6 +6,8 @@ local arg = util.arg
 
 local TableDataset = torch.class("dataset.TableDataset")
 
+-- TODO: add method to get dimensions
+
 function TableDataset:__init(data_table)
     self.dataset = data_table
 
@@ -127,8 +129,46 @@ function TableDataset:mini_batches(options)
                   indices)
 end
 
---[[
-* get sampled animation sequences
- - add frame # to each sample
 
---]]
+-- Returns the sequence of frames corresponding to a specific sample's animation.
+--
+--   for frame,label in m:animation(1) do
+--      local img = frame:unfold(1,28,28)
+--      win = image.display({win=win, image=img, zoom=10})
+--      util.sleep(1 / 24)
+--   end
+--
+function TableDataset:animation(i)
+   local start = ((i-1) * self.frames) + 1
+   return self:mini_batch(start, self.frames, {sequence = true})
+end
+
+
+-- Returns a sequence of animations, where each animation is a sequence of
+-- samples.
+--
+--   for anim in m:animations() do
+--      for frame,label in anim do
+--         local img = frame:unfold(1,28,28)
+--         win = image.display({win=win, image=img, zoom=10})
+--         util.sleep(1 / 24)
+--      end
+--   end
+--
+function TableDataset:animations(options)
+   options = options or {}
+   local shuffled = arg.optional(options, 'shuffled', true)
+   local indices
+
+   if shuffled then
+      indices = torch.randperm(self.base_size)
+   else
+      indices = seq.range(self.base_size)
+   end
+   return seq.map(function(i)
+                     return self:animation(i)
+                  end,
+                  indices)
+end
+
+

@@ -123,51 +123,6 @@ function dataset.rand_pair(v_min, v_max)
    return a,b
 end
 
-function dataset.rotator(start, delta)
-   local angle = start
-   return function(src, dst)
-      image.rotate(dst, src, angle)
-      angle = angle + delta
-   end
-end
-
-function dataset.translator(startx, starty, dx, dy)
-   local started = false
-   local cx = startx
-   local cy = starty
-   return function(src, dst)
-      local res = image.translate(src, cx, cy)
-      dst:copy(res)
-      cx = cx + dx
-      cy = cy + dy
-   end
-end
-
-function dataset.zoomer(start, dz)
-   local factor = start
-   return function(src, dst)
-      local src_width  = src:size()[1]
-      local src_height = src:size()[2]
-      local width      = math.floor(src_width * factor)
-      local height     = math.floor(src_height * factor)
-
-      local res = image.scale(src, width, height)
-      if factor > 1 then
-         local sx = math.floor((width - src_width) / 2)+1
-         local sy = math.floor((height - src_height) / 2)+1
-         dst:copy(res:sub(sx, sx+src_width-1, sy, sy+src_height-1))
-      else
-         local sx = math.floor((src_width - width) / 2)+1
-         local sy = math.floor((src_height - height) / 2)+1
-         dst:zero()
-         dst:sub(sx,  sx+width-1, sy, sy+height-1):copy(res)
-      end
-
-      factor = factor + dz
-   end
-end
-
-
 function dataset.sort_by_class(samples, labels)
     local size = labels:size()[1]
     local sorted_labels, sort_indices = torch.sort(labels)

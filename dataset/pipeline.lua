@@ -26,8 +26,37 @@ require 'dataset/table_dataset'
 
 pipe = {}
 
+-- Create a processing pipeline out of a table of
+-- pipeline functions that should all take a sample and return a sample.
+-- e.g.
+--
+--   local processor =
+--    pipe.line({pipe.image_loader,
+--              pipe.scaler(width, height),
+--              pipe.rgb2yuv,
+--              pipe.normalizer,
+--              pipe.spatial_normalizer(1, 7, 1, 1),
+--              patch_sampler(10, 10)
+--              })
+--
+--   local data_stream = pipe.run(pipe.file_data_source(path), processor)
+function pipe.line(funcs)
+   return function(sample)
+      return fn.thread(sample, unpack(funcs))
+   end
+end
+
+
+-- Connect a sample source to a pipeline, returning a sample iterator.
+function pipe.connect(src, line)
+   return seq.map(line, src)
+end
+
+
 -- Create a processing pipeline that takes a data source iterator, and a list of
 -- pipeline functions that should all take a sample and return a sample.
+-- Returns a sample iterator.
+--
 -- e.g.
 --
 --    pipe.pipeline(pipe.file_data_source(path),
@@ -39,15 +68,8 @@ pipe = {}
 --                  patch_sampler(10, 10)
 --                  )
 function pipe.pipeline(src, ...)
-   local args = {...}
-   return function()
-      local next_elem = src()
-      if next_elem then
-         return fn.thread(next_elem, unpack(args))
-      else
-         return nil
-      end
-   end
+   local funcs = {...}
+   return pipe.connect(src, pipe.line(funcs))
 end
 
 
@@ -174,7 +196,7 @@ function pipe.spatial_normalizer(channel, radius, threshold, thresval)
    return function(sample)
       if sample == nil then return nil end
 
-      sample.data = normalizer:forward(sample.data[{{channel},{},{}}]:float())
+      sample.data[{{channel},{},{}}]:copy(normalizer:forward(sample.data[{{channel},{},{}}]:float()))
       return sample
    end
 end
@@ -200,6 +222,7 @@ function pipe.normalizer(sample)
 end
 
 
+-- Play a movie by displaying samples out of src at frame rate fps.
 function pipe.movie_player(src, fps)
    local movie_win
 
@@ -211,6 +234,8 @@ end
 
 
 local display_win
+
+-- Display a sample.
 function pipe.display(sample)
    if sample == nil then return nil end
 
@@ -220,6 +245,7 @@ function pipe.display(sample)
 end
 
 
+-- Pretty print a sample.
 function pipe.pprint(sample)
    if sample == nil then return nil end
 
@@ -228,6 +254,7 @@ function pipe.pprint(sample)
 end
 
 
+-- Select a subset of keys from a sample table, discarding the rest.
 function pipe.select_keys(...)
    local keys = {...}
 
@@ -244,6 +271,7 @@ function pipe.select_keys(...)
 end
 
 
+-- Remove one or more keys from a sample table.
 function pipe.remove_keys(...)
    local keys = {...}
 
@@ -259,6 +287,163 @@ function pipe.remove_keys(...)
 end
 
 
+-- Typecast the value of property key in samples to type t.
+-- (e.g. pipe.type('float', 'data') will typecast all data
+-- tensors to be float tensors.)
+function pipe.type(t, key)
+   return function(sample)
+      if key then
+         sample[key] = sample[key][t](sample[key])
+      else
+         for k,_ in pairs(sample) do
+            sample[k] = sample[key][t](sample[key])
+         end
+      end
+      return sample
+   end
+end
+
+
+-- Rotate input samples by r radians.
+function pipe.rotator(r)
+   --local rotated = torch.Tensor()
+   return function(sample)
+      --rotated:resizeAs(sample.data)
+      local res = image.rotate(sample.data, r)
+      sample.data:copy(res)
+      return sample
+   end
+end
+
+
+-- Translate input samples by dx, dy.
+function pipe.translator(dx, dy)
+   local translated = torch.Tensor()
+   return function(sample)
+      translated:resizeAs(sample.data)
+      image.translate(translated, sample.data, dx, dy)
+      sample.data:copy(translated)
+      return sample
+   end
+end
+
+
+-- Zoom input samples in or out by factor dz.
+function pipe.zoomer(dz)
+   local zoomed = torch.Tensor()
+
+   return function(sample)
+      local src_width  = sample.data:size(2)
+      local src_height = sample.data:size(3)
+      local width      = math.floor(src_width * dz)
+      local height     = math.floor(src_height * dz)
+      zoomed:resize(sample.data:size(1), width, height)
+
+      image.scale(sample.data, zoomed, 'bilinear')
+      if dz > 1 then
+         local sx = math.floor((width - src_width) / 2)+1
+         local sy = math.floor((height - src_height) / 2)+1
+         sample.data:copy(res:narrow(2, sx, src_width):narrow(3, sy, src_height))
+      else
+         local sx = math.floor((src_width - width) / 2)+1
+         local sy = math.floor((src_height - height) / 2)+1
+         sample.data:zero()
+         sample.data:narrow(2, sx, width):narrow(3, sy, height):copy(zoomed)
+      end
+
+      return sample
+   end
+end
+
+
+-- Animate input samples by sending them through an animation pipeline
+-- iteratively for n_frames.  (So each input sample will result in an
+-- animation that is n_frames samples long.)
+function pipe.animator(src, anim_line, n_frames)
+   local framer = function(start)
+      local frame = 1
+      local cur_sample = start
+      return function()
+         s = cur_sample
+         s.frame = frame
+         frame = frame + 1
+         local animated = anim_line(s)
+         cur_sample = util.deep_copy(animated)
+         return animated
+      end
+   end
+
+   return seq.mapcat(function(sample)
+                      print("sample.class: ", sample.class)
+                      return seq.take(n_frames, framer(sample))
+                    end,
+                    src)
+end
+
+
+--[[
+-- TODO: Integrate some of the random animation capability that was available in
+-- this mnist animation code, so we can produce randomized movies.
+
+function Mnist:_animate(rotation, translation, zoom)
+   local full_size = self.frames * self.size
+   local animated = torch.Tensor(full_size, Mnist.n_dimensions):zero()
+   local animated_labels = torch.Tensor(full_size)
+
+   for i=1,self.size do
+      for f=1,self.frames do
+         animated_labels[1 + (i-1)*self.frames + (f-1)] = self.labels[i]
+      end
+   end
+
+   for sample=1,self.size do
+      local transformers = {}
+      if (#rotation > 0) then
+         local rot_start, rot_finish = dataset.rand_pair(rotation[1], rotation[2])
+         rot_start = rot_start * math.pi / 180
+         rot_finish = rot_finish * math.pi / 180
+         local rot_delta = (rot_finish - rot_start) / self.frames
+         table.insert(transformers, dataset.rotator(rot_start, rot_delta))
+         self.rotation = rotation
+      end
+
+      if (#translation > 0) then
+         local xmin_tx, xmax_tx = dataset.rand_pair(translation[1], translation[2])
+         local ymin_tx, ymax_tx = dataset.rand_pair(translation[3], translation[4])
+         local dx = (xmax_tx - xmin_tx) / frames
+         local dy = (ymax_tx - ymin_tx) / frames
+         table.insert(transformers, dataset.translator(xmin_tx, ymin_tx, dx, dy))
+         self.translation = translation
+      end
+
+      if (#zoom > 0) then
+         local zoom_start, zoom_finish = dataset.rand_pair(zoom[1], zoom[2])
+         local zoom_delta = (zoom_finish - zoom_start) / self.frames
+         table.insert(transformers, dataset.zoomer(zoom_start, zoom_delta))
+         self.zoom = zoom
+      end
+
+      local src = self.samples[sample]:unfold(1, 28, 28)
+      for f=1,self.frames do
+         local dst = animated:narrow(1, (sample-1)*self.frames + f, 1):select(1,1):unfold(1, 28, 28)
+         local tsrc = src
+         for _, transform in ipairs(transformers) do
+            transform(tsrc, dst)
+            tsrc = dst
+         end
+      end
+   end
+end
+
+--]]
+
+
+-- Copy samples in a pipeline into a data table which will be one table
+-- with a tensor or table for each property of the samples.
+-- (e.g. 100 samples each with {data = <tensor> class = id} will result
+-- in one table with two tensors of size 100.)
+-- The dtable argument is optional, and can be passed if you want to write
+-- into an existing datatable, rather than allocating a new one.
 function pipe.to_data_table(n, pipeline, dtable)
    local sample = pipeline()
 
@@ -295,57 +480,63 @@ function pipe.to_data_table(n, pipeline, dtable)
 end
 
 
+-- Turn a data table into a pipeline source, producing samples.
 function pipe.data_table_source(table)
    local dataset = dataset.TableDataset(table)
    return dataset:sampler({shuffled = false})
 end
 
 
-function pipe.type(t, key)
-   return function(sample)
-      if key then
-         sample[key] = sample[key][t](sample[key])
-      else
-         for k,_ in pairs(sample) do
-            sample[k] = sample[key][t](sample[key])
-         end
-      end
-      return sample
-   end
-end
-
-
-function pipe.write_to_disk(path, metadata)
+-- Write a pipeline to disk.
+function pipe.write_to_disk(path, src, metadata)
    metadata = metadata or {}
    local file = torch.DiskFile(path, 'w')
    file:binary()
 
+   file:writeInt(0)
+   file:writeObject(metadata)
+
    local count = 0
-   return function(sample)
-      if sample == nil then
-         file:close()
-
-         local md_file = torch.DiskFile(md_name, 'w')
-         md.size = count
-         md_file:writeObject(md)
-         md_file:close()
-
-         return nil
-      end
-
-      f:writeObject(sample)
+   for sample in src do
+      file:writeObject(sample)
       count = count + 1
-      return sample
    end
+
+   file:seek(1)
+   file:writeInt(count)
+   file:close()
+
+   return count
 end
 
 
-function pipe.load_from_disk(path)
+-- Read data from a file on disk, returns a metadata table and a pipeline source.
+function pipe.file_source(path)
    local f = torch.DiskFile(path, 'r')
    f:binary()
 
-   local tensor       = torch.Tensor(n_examples, n_dimensions)
-   tensor:storage():copy(f:readFloat(n_examples * n_dimensions))
+   local size = f:readInt()
+   local metadata = f:readObject()
+   local count = 0
 
-   return n_examples, n_dimensions, tensor
+   local src = function()
+      if count == size then
+         return nil
+      else
+         local sample = f:readObject()
+         count = count + 1
+         return sample
+      end
+   end
+
+   metadata.size = size
+   return metadata, src
 end
+
+
+-- Load a data table from a file on disk.
+function pipe.data_table_from_file(path)
+   local md, src = pipe.file_source(path)
+   return pipe.to_data_table(md.size, src)
+end
+
