@@ -35,10 +35,6 @@ function coil_animations()
    pipe.movie_player(seq.take(5*fps, frames), fps)
 end
 
---coil_from_images()
---coil_mini_batches()
---coil_animations()
-
 
 function coil_serialization()
    local p = Coil.default_pipeline('ext/coil-100', 64, 64)
@@ -47,5 +43,8 @@ function coil_serialization()
    pprint(dtable)
 end
 
-coil_serialization()
+--coil_from_images()
+--coil_mini_batches()
+coil_animations()
+--coil_serialization()
 
