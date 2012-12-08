@@ -12,7 +12,7 @@ local arg = util.arg
 
 require 'dataset'
 
-local Mnist = torch.class("dataset.Mnist")
+Mnist = torch.class("dataset.Mnist")
 Mnist.name         = 'mnist'
 Mnist.dimensions   = {1, 28, 28}
 Mnist.n_dimensions = 1 * 28 * 28
