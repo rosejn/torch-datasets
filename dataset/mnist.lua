@@ -92,6 +92,7 @@ function Mnist.dataset(opts)
    rotation    = arg.optional(opts, 'rotation', {})
    translation = arg.optional(opts, 'translation', {})
    zoom        = arg.optional(opts, 'zoom', {})
+   sort        = arg.optional(opts, 'sort', false)
 
    local transformations = {}
 
@@ -108,7 +109,9 @@ function Mnist.dataset(opts)
       labels[i] = data[{i, 785}]
    end
 
-   samples, labels = dataset.sort_by_class(samples, labels)
+   if sort then
+      samples, labels = dataset.sort_by_class(samples, labels)
+   end
 
    if normalize then
        mean, std = dataset.global_normalization(samples)
