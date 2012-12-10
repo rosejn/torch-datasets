@@ -6,7 +6,6 @@ local arg = util.arg
 
 local TableDataset = torch.class("dataset.TableDataset")
 
--- TODO: add method to get dimensions
 
 function TableDataset:__init(data_table)
     self.dataset = data_table
@@ -18,6 +17,21 @@ end
 
 function TableDataset:size()
    return self.dataset.data:size(1)
+end
+
+
+function TableDataset:dimensions()
+   local full_dims = self.dataset.data:size()
+   local dims = {}
+   for i = 2,#full_dims do
+	  table.insert(dims, full_dims[i])
+   end
+   return dims
+end
+
+
+function TableDataset:n_dimensions()
+	return fn.reduce(fn.mul, 1, self:dimensions())
 end
 
 
