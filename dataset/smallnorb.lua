@@ -163,7 +163,9 @@ end
 
 Parameters:
 
-* n_frames (unsigned) :
+* test (optional boolean, default : false)
+	use test set instead of training set
+* n_frames (optional unsigned) :
 	number of frames to return
 * pairs (optional string : ('combined' | 'left' | 'right'):
 	How should stereo pairs be loaded? 'combined' returns the two sub-images in each example,
@@ -183,10 +185,11 @@ Parameters:
 	restrict dataset to objects with the given lighting
 
 --]]
-local function data(files, opt)
+function SmallNorb.dataset(opt)
 
 	opt = opt or {}
 
+	local test              = arg.optional(opts, 'test', false)
 	local n_frames          = arg.optional(opt, 'n_frames', SmallNorb.size/2)
 	local pair_format       = arg.optional(opt, 'pairs', 'combined')
 	local class             = arg.optional(opt, 'class')
@@ -196,6 +199,13 @@ local function data(files, opt)
 	local elevation         = arg.optional(opt, 'elevation')
 	local azimuth           = arg.optional(opt, 'azimuth')
 	local lighting          = arg.optional(opt, 'lighting')
+
+	local files
+	if test then
+		files = SmallNorb.testing_files
+	else
+		files = SmallNorb.training_files
+	end
 
 	local raw = util.merge(
 		split_metadata(raw_data(files.info)),
@@ -229,22 +239,9 @@ local function data(files, opt)
 	local pipeline = pipe.pipeline(unpack(stages))
 	local table = pipe.to_data_table(n_frames, pipeline)
 	
-	return dataset.TableDataset(table)
+	return dataset.TableDataset(table, SmallNorb)
 end
 
-
-
--- see SmallNorb.data
-function SmallNorb.test_data(opt)
-	return data(SmallNorb.testing_files, opt)
-end
-
-
-
--- see SmallNorb.data
-function SmallNorb.train_data(opt)
-	return data(SmallNorb.training_files, opt)
-end
 
 
 return SmallNorb
