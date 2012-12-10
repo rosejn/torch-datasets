@@ -100,9 +100,13 @@ end
 
 
 -- Returns a sequence of tables with the path property for all files in dir
--- with a matching suffix.  (e.g. { path = 'image_1.png' } )
-function pipe.matching_paths(dir, suffix)
-   local files = matching_file_seq(dir, suffix)
+-- that match pattern p.  (Note, it doesn't have to be a whole match, so
+-- even a suffix match will work.)
+-- e.g.
+--   pipe.matching_paths('./data', '.png')
+--      => { { path = 'image_1.png' } ... }
+function pipe.matching_paths(dir, p)
+   local files = matching_file_seq(dir, p)
    return path_seq(dir, files)
 end
 
