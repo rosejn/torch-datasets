@@ -18,7 +18,7 @@ Mnist.name         = 'mnist'
 Mnist.dimensions   = {1, 28, 28}
 Mnist.n_dimensions = 1 * 28 * 28
 Mnist.size         = 60000
-Mnist.classes      = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+Mnist.classes      = {[0] = 0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 Mnist.url          = 'http://data.neuflow.org/data/mnist-th7.tgz'
 Mnist.file         = 'mnist-th7/train.th7'
 
@@ -130,7 +130,7 @@ function Mnist.dataset(opts)
    --if (#rotation > 0) or (#translation > 0) or (#zoom > 0) then
    --   self:_animate(rotation, translation, zoom)
    --end
-   return dataset.TableDataset(d)
+   return dataset.TableDataset(d, Mnist)
 end
 
 

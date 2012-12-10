@@ -7,8 +7,14 @@ local arg = util.arg
 local TableDataset = torch.class("dataset.TableDataset")
 
 
-function TableDataset:__init(data_table)
-    self.dataset = data_table
+function TableDataset:__init(data_table, global_metadata)
+
+   self.dataset = data_table
+
+   global_metadata = global_metadata or {}
+
+   self._name = global_metadata.name
+   self._classes = global_metadata.classes or {}
 
     --util.set_index_fn(self, self.sample)
     --util.set_size_fn(self, self.size)
@@ -31,7 +37,17 @@ end
 
 
 function TableDataset:n_dimensions()
-	return fn.reduce(fn.mul, 1, self:dimensions())
+   return fn.reduce(fn.mul, 1, self:dimensions())
+end
+
+
+function TableDataset:classes()
+   return self._classes
+end
+
+
+function TableDataset:name()
+   return self._name
 end
 
 
