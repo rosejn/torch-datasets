@@ -7,30 +7,37 @@ require 'util/file'
 require 'logroll'
 require 'dataset'
 
-cifar10 = {}
+Cifar = {}
+Cifar.name         = 'cifar10',
+Cifar.dimensions   = {3, 32, 32},
+Cifar.n_dimensions = 3 * 32 * 32,
+Cifar.size         = function() return 50000 end,
+Cifar.classes      = {'airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck'},
+Cifar.url          = 'http://www.cs.toronto.edu/~kriz/cifar-10-binary.tar.gz',
+Cifar.dir          = 'cifar-10-batches-bin'
+Cifar.files        = {'cifar-10-batches-bin/data_batch_1.bin', 'cifar-10-batches-bin/data_batch_2.bin',
+                      'cifar-10-batches-bin/data_batch_3.bin', 'cifar-10-batches-bin/data_batch_4.bin',
+                      'cifar-10-batches-bin/data_batch_5.bin'},
+Cifar.batch_size   = 10000
+Cifar.test_file = {'cifar-10-batches-bin/test_batch.bin'}
 
-cifar10_md = {
-    name         = 'cifar10',
-    dimensions   = {3, 32, 32},
-    n_dimensions = 3 * 32 * 32,
-    size         = function() return 50000 end,
+local function cifar_source(dir, pattern)
+    local data = torch.Tensor(unpack(Cifar.dimensions))
+    local files = pipe.matching_paths(dir, pattern)
+    local f = torch.DiskFile('data_batch_1.bin', 'r')
+    local class = f:readByte()
 
-    classes      = {'airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck'},
+t7> img:storage():copy(f:readByte(3072))
 
-    url          = 'http://data.neuflow.org/data/cifar-10-torch.tar.gz',
+end
 
-    files        = {'cifar-10-batches-t7/data_batch_1.t7', 'cifar-10-batches-t7/data_batch_2.t7',
-                    'cifar-10-batches-t7/data_batch_3.t7', 'cifar-10-batches-t7/data_batch_4.t7',
-                    'cifar-10-batches-t7/data_batch_5.t7'},
-    batch_size   = 10000
-}
+function Cifar.data_source()
+    local path = dataset.data_path(Cifar.name, Cifar.url, Cifar.dir)
+    return cifar_source(path, "
+end
 
-
-cifar10_test_md = util.merge(util.copy(cifar10_md), {
-    size = function() return 10000 end,
-    files   = {'cifar-10-batches-t7/test_batch.t7'}
-})
-
+function Cifar.test_source()
+end
 
 local function load_data_files(md)
     local data   = torch.Tensor(md.size(), md.n_dimensions)

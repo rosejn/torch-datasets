@@ -11,6 +11,7 @@ require 'util/arg'
 local arg = util.arg
 
 require 'dataset'
+require 'dataset/table_dataset'
 
 Mnist = torch.class("dataset.Mnist")
 Mnist.name         = 'mnist'
@@ -114,7 +115,8 @@ function Mnist.dataset(opts)
    end
 
    if (#scale > 0) then
-       table.insert(transformations, pipe.scaler(scale[1], scale[2]))
+       --table.insert(transformations, pipe.scaler(scale[1], scale[2]))
+       dataset.scale(samples, scale[1], scale[2])
    end
 
    local d = {
@@ -122,9 +124,10 @@ function Mnist.dataset(opts)
        class = labels
    }
 
-   if (#rotation > 0) or (#translation > 0) or (#zoom > 0) then
-      self:_animate(rotation, translation, zoom)
-   end
+   --if (#rotation > 0) or (#translation > 0) or (#zoom > 0) then
+   --   self:_animate(rotation, translation, zoom)
+   --end
+   return dataset.TableDataset(d)
 end
 
 
