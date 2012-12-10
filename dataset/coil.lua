@@ -94,7 +94,7 @@ function Coil.dataset(width, height)
    local pipeline = Coil.pipeline(width, height)
    local table     = pipe.to_data_table(Coil.size, pipeline)
 
-   return dataset.TableDataset(table)
+   return dataset.TableDataset(table, Coil)
 end
 
 
