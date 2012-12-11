@@ -120,6 +120,7 @@ function Mnist.dataset(opts)
       data = Mnist.raw_data(size)
    end
    local samples = data:narrow(2, 1, Mnist.n_dimensions):clone()
+   samples:resize(Mnist.size, unpack(Mnist.dimensions))
 
    local labels = torch.Tensor(size)
    for i=1,size do
