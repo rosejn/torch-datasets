@@ -17,7 +17,7 @@ require 'dataset/table_dataset'
 Coil = {}
 
 Coil.name         = 'coil'
-Coil.dimensions   = {1, 128, 128}
+Coil.dimensions   = {3, 128, 128}
 Coil.n_dimensions = 3 * 128 * 128
 Coil.size         = 7200
 Coil.url          = 'http://www.cs.columbia.edu/CAVE/databases/SLAM_coil-20_coil-100/coil-100/coil-100.zip'
