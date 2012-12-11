@@ -3,3 +3,9 @@
 or mini-batch on the fly
 * add fully randomized mini-batches (copy in samples)
 * implement randomized animations
+
+-- * modify these to be random transforms that take {min,max}
+-- * use old mnist animate function to add randomized animation support
+-- * add pipeline args to TableDataset, sampler
+-- * modify sampler to take a batch size, and option for truly random batches
+

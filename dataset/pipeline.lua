@@ -289,10 +289,11 @@ function pipe.disk_object_sink(path, metadata)
          file:writeInt(count)
          file:close()
       else
-         file:writeObject(util.deep_copy(sample))
+         --file:writeObject(util.deep_copy(sample))
          -- Once the force patch is accepted, we can switch to this:
-         --file:writeObject(sample, true)
+         file:writeObject(sample, true)
          count = count + 1
+         print("wrote object: ", count)
       end
 
       return sample
@@ -303,25 +304,6 @@ end
 --------------------------------------------------------------------------
 -- Transformation stages
 --------------------------------------------------------------------------
-
-
--- Convert from continuous to binary data.
-function pipe.binarize(sample)
-   sample.data = sample:gt(0.5):float()
-end
-
-
--- Pad sample.data on all sides with value v.
-function pipe.pad_values(width, v)
-   return function(sample)
-      local new_sample = torch.Tensor(sample:size(1),
-                                      sample:size(2) + width*2,
-                                      sample:size(3) + width*2):fill(v)
-      new_sample:narrow(2, width+1, sample:size(2)):narrow(3, width+1, sample:size(3)):copy(sample)
-      sample.data = new_sample
-      return sample
-   end
-end
 
 
 -- Reads sample.path and loads an image (torch.Tensor) into sample.data.
@@ -367,8 +349,8 @@ function pipe.flip_horizontal(sample)
 end
 
 
--- Scales the sample.data to be the target width and height.
-function pipe.scaler(width, height)
+-- Resizes the sample.data to be the target width and height.
+function pipe.resizer(width, height)
    return function(sample)
       if sample == nil then return nil end
 
@@ -434,6 +416,28 @@ function pipe.spatial_normalizer(channel, radius, threshold, thresval)
 end
 
 
+-- Convert from continuous to binary data.
+function pipe.binarize(sample)
+   sample.data = sample:gt(0.5):float()
+end
+
+
+-- Pad sample.data on all sides with value v (default = 0).
+function pipe.pad_values(width, v)
+   v = v or 0
+
+   return function(sample)
+      local new_sample = torch.Tensor(sample:size(1),
+                                      sample:size(2) + width*2,
+                                      sample:size(3) + width*2):fill(v)
+      new_sample:narrow(2, width+1, sample:size(2)):narrow(3, width+1, sample:size(3)):copy(sample)
+      sample.data = new_sample
+      return sample
+   end
+end
+
+
+
 -- Select a subset of keys from a sample table, discarding the rest.
 function pipe.select_keys(...)
    local keys = {...}
@@ -467,10 +471,12 @@ function pipe.remove_keys(...)
 end
 
 
--- Typecast the value of property key in samples to type t.
+-- Typecast the value of property key (default = 'data') in samples to type t.
 -- (e.g. pipe.type('float', 'data') will typecast all data
 -- tensors to be float tensors.)
 function pipe.type(t, key)
+   key = key or 'data'
+
    return function(sample)
       if key then
          sample[key] = sample[key][t](sample[key])
@@ -554,6 +560,60 @@ function pipe.zoomer(dz)
 
       return sample
    end
+end
+
+
+pipe.arg_map = {
+   {'resize',          pipe.resizer},
+   {'crop',            pipe.cropper},
+   {'patches',         pipe.patch_sampler},
+   {'flip_vertical',   pipe.flip_vertical},
+   {'flip_horizontal', pipe.flip_horizontal},
+   {'yuv',             pipe.rgb2yuv},
+   {'normalize',       pipe.normalizer},
+   {'div',             pipe.div},
+   {'binarize',        pipe.binarize},
+   {'pad',             pipe.pad_values},
+   {'type',            pipe.type},
+}
+
+
+function pipe.construct_pipeline(opts)
+   local stages = {}
+
+   print("{")
+   for stage in seq.seq(pipe.arg_map) do
+      local name = stage[1]
+      local fn   = stage[2]
+
+      --print("name: ", name)
+
+      opt_val = opts[name]
+      if opt_val then
+         --print("val: ", opt_val)
+
+         local args
+         if opt_val == true then
+            args = {}
+         elseif util.is_table(opt_val) then
+            args = opt_val
+         else
+            args = {opt_val}
+         end
+
+         local transform
+         if #args == 0 then
+            transform = fn
+         else
+            transform = fn(unpack(args))
+         end
+         table.insert(stages, transform)
+         print(string.format("  %s(%s)", name, pretty_string(args)))
+      end
+   end
+
+   print("}")
+   return pipe.line(stages)
 end
 
 

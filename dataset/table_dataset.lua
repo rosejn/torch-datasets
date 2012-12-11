@@ -1,7 +1,7 @@
-require 'dataset'
 require 'fn'
 require 'fn/seq'
 require 'util/arg'
+require 'dataset'
 local arg = util.arg
 
 local TableDataset = torch.class("dataset.TableDataset")
@@ -200,3 +200,4 @@ function TableDataset:animations(options)
                   end,
                   indices)
 end
+
