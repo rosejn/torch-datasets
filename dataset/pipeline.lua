@@ -571,6 +571,7 @@ pipe.arg_map = {
    {'flip_horizontal', pipe.flip_horizontal},
    {'yuv',             pipe.rgb2yuv},
    {'normalize',       pipe.normalizer},
+   {'whitening',       pipe.spatial_normalizer},
    {'div',             pipe.div},
    {'binarize',        pipe.binarize},
    {'pad',             pipe.pad_values},
@@ -581,7 +582,7 @@ pipe.arg_map = {
 function pipe.construct_pipeline(opts)
    local stages = {}
 
-   print("{")
+   --print("{")
    for stage in seq.seq(pipe.arg_map) do
       local name = stage[1]
       local fn   = stage[2]
@@ -597,7 +598,7 @@ function pipe.construct_pipeline(opts)
             args = {}
          elseif util.is_table(opt_val) then
             args = opt_val
-         else
+         elseif util.is_number(opt_val) then
             args = {opt_val}
          end
 
@@ -608,11 +609,11 @@ function pipe.construct_pipeline(opts)
             transform = fn(unpack(args))
          end
          table.insert(stages, transform)
-         print(string.format("  %s(%s)", name, pretty_string(args)))
+         --print(string.format("  %s(%s)", name, pretty_string(args)))
       end
    end
 
-   print("}")
+   --print("}")
    return pipe.line(stages)
 end
 

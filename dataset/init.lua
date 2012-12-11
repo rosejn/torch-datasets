@@ -17,6 +17,8 @@ function dataset.get_data(name, url)
   local data_file = paths.basename(url)
   local data_path = paths.concat(set_dir, data_file)
 
+  --print("checking for file located at: ", data_path)
+
   check_and_mkdir(TORCH_DIR)
   check_and_mkdir(DATA_DIR)
   check_and_mkdir(set_dir)
@@ -33,7 +35,10 @@ function dataset.data_path(name, url, file)
     local local_path = paths.concat(data_dir, file)
 
     if not is_file(local_path) then
-        do_with_cwd(data_dir, function() decompress_file(data_path) end)
+        do_with_cwd(data_dir,
+          function()
+              decompress_file(data_path)
+          end)
     end
 
     return local_path

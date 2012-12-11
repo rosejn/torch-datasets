@@ -7,6 +7,21 @@ local arg = util.arg
 local TableDataset = torch.class("dataset.TableDataset")
 
 
+-- Wraps a table containing a dataset to make it easy to transform the dataset
+-- and then sample from.  Each property in the data table must have a tensor or
+-- table value, and then each sample will be retrieved by indexing these values
+-- and returning a single instance from each one.
+--
+-- e.g.
+--
+--   -- a 'dataset' of random samples with random class labels
+--   data_table = {
+--     data  = torch.Tensor(10, 20, 20),
+--     class = torch.randperm(10)
+--   }
+--   metadata = { name = 'random', classes = {1,2,3,4,5,6,7,8,9,10} }
+--   dataset = TableDataset(data_table, metadata)
+--
 function TableDataset:__init(data_table, global_metadata)
 
    self.dataset = data_table
@@ -15,37 +30,41 @@ function TableDataset:__init(data_table, global_metadata)
 
    self._name = global_metadata.name
    self._classes = global_metadata.classes or {}
-
-    --util.set_index_fn(self, self.sample)
-    --util.set_size_fn(self, self.size)
 end
 
 
+-- Returns the number of samples in the dataset.
 function TableDataset:size()
    return self.dataset.data:size(1)
 end
 
 
+-- Returns the dimensions of a single sample as a table.
+-- e.g.
+--   mnist          => {1, 28, 28}
+--   natural images => {3, 64, 64}
 function TableDataset:dimensions()
-   local full_dims = self.dataset.data:size()
-   local dims = {}
-   for i = 2,#full_dims do
-	  table.insert(dims, full_dims[i])
-   end
+   local dims = self.dataset.data:size():totable()
+   table.remove(dims, 1)
    return dims
 end
 
 
+-- Returns the total number of dimensions of a sample.
+-- e.g.
+--   mnist => 1*28*28 => 784
 function TableDataset:n_dimensions()
    return fn.reduce(fn.mul, 1, self:dimensions())
 end
 
 
+-- Returns the classes represented in this dataset (if available).
 function TableDataset:classes()
    return self._classes
 end
 
 
+-- Returns the string name of this dataset.
 function TableDataset:name()
    return self._name
 end
