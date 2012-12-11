@@ -1,21 +1,5 @@
-* need some options when requesting a dataset:
- - number of samples needed, to speedup disk load when testing
- - scale, min/max, whitening, normalization
-
-* implement
- * __tostring metamethod for user friendly display on the repl
- * __concat maybe? to concat datasets
- * is there a metamethod to implement the size # operator?
-
-
-* change default data directory to something torch friendly
-
-* get house_numbers running again
- - also with test dataset
-
-* add support for
- - others already in Torch friendly format here (http://data.neuflow.org/data/)
- - norb (http://www.cs.nyu.edu/~ylclab/data/norb-v1.0/)
- - norb small (http://www.cs.nyu.edu/~ylclab/data/norb-v1.0-small/)
- - labeled faces (http://vis-www.cs.umass.edu/lfw/index.html)
- - caltech 101, faces, pedestrians, etc...  (http://www.vision.caltech.edu/archive.html)
+* create a pipeline from table of options
+* support transforming dataset either once on construction or for every sample
+or mini-batch on the fly
+* add fully randomized mini-batches (copy in samples)
+* implement randomized animations

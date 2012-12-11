@@ -46,8 +46,8 @@ end
 
 
 -- Returns a sequence of tables representing the coil images sorted by image number and angle.
-local function image_paths(dir)
-   local files = pipe.matching_paths(dir, 'obj')
+local function image_paths(path)
+   local files = pipe.file_source(path, 'obj')
    local file_maps = seq.table(seq.map(coil_metadata_extractor, files))
    local numerical_order = function(a, b)
       if a.image < b.image then
@@ -92,7 +92,7 @@ end
 -- in a normalized YUV color format.
 function Coil.dataset(width, height)
    local pipeline = Coil.pipeline(width, height)
-   local table     = pipe.to_data_table(Coil.size, pipeline)
+   local table    = pipe.data_table_sink(Coil.size, pipeline)
 
    return dataset.TableDataset(table, Coil)
 end

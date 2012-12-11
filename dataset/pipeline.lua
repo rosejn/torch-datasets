@@ -26,6 +26,10 @@ require 'dataset/table_dataset'
 
 pipe = {}
 
+--------------------------------------------------------------------------
+-- Pipeline construction
+--------------------------------------------------------------------------
+
 -- Create a processing pipeline out of a table of
 -- pipeline functions that should all take a sample and return a sample.
 -- e.g.
@@ -73,57 +77,250 @@ function pipe.pipeline(src, ...)
 end
 
 
--- Returns a sequence of file names located in dir.
-function pipe.file_seq(dir)
-  return seq.seq(fs.readdir(dir))
+-- Animate input samples by sending them through an animation pipeline
+-- iteratively for n_frames.  (So each input sample will result in an
+-- animation that is n_frames samples long.)
+function pipe.animator(src, anim_line, n_frames)
+   local framer = function(start)
+      local frame = 1
+      local cur_sample = start
+      return function()
+         s = cur_sample
+         s.frame = frame
+         frame = frame + 1
+         local animated = anim_line(s)
+         cur_sample = util.deep_copy(animated)
+         return animated
+      end
+   end
+
+   return seq.mapcat(function(sample)
+                      print("sample.class: ", sample.class)
+                      return seq.take(n_frames, framer(sample))
+                    end,
+                    src)
 end
 
 
--- Returns a seq of files located in dir for which string.find will match
--- the expression ex.
-local function matching_file_seq(dir, ex)
-   return seq.filter(function(name) return string.find(name, ex) end,
-                     pipe.file_seq(dir))
-end
-
--- Maps a seq of files into a seq of tables with filename and path
--- properties set.
-local function path_seq(dir, files)
-   return seq.map(function(filename)
-      return {
-         filename = filename,
-         path = paths.concat(dir, filename)
-      }
-   end,
-   files)
-end
+--------------------------------------------------------------------------
+-- Sources
+--------------------------------------------------------------------------
 
 
--- Returns a sequence of tables with the path property for all files in dir
--- that match pattern p.  (Note, it doesn't have to be a whole match, so
--- even a suffix match will work.)
+-- Returns a sequence of {filename = <fname>, path = <path> } entries for a
+-- directory dir.  If a pattern p is also passed, then only files which match
+-- the pattern will be returned.
+-- (Note, it doesn't have to be a whole match, so even a suffix match will work.)
 -- e.g.
 --   pipe.matching_paths('./data', '.png')
---      => { { path = 'image_1.png' } ... }
-function pipe.matching_paths(dir, p)
-   local files = matching_file_seq(dir, p)
-   return path_seq(dir, files)
+--      => { { filename = 'image_1.png', path = 'data/image_1.png' } ... }
+function pipe.file_source(dir, p)
+  local files = seq.map(function(filename)
+     return {
+        filename = filename,
+        path = paths.concat(dir, filename)
+     }
+  end,
+  seq.seq(fs.readdir(dir)))
+
+  if p then
+     return seq.filter(function(s)
+        return string.find(s.filename, p)
+     end,
+     files)
+  else
+     return files
+  end
 end
 
 
 -- Returns a sequence of tables representing images in a directory, where
--- each table has the path and filename properties.
+-- each table has the path and filename properties.  (Use the image_loader stage
+-- to read the paths and load the images.)
 function pipe.image_dir_source(dir)
-   local files = pipe.file_seq(dir)
+   local files = pipe.file_source(dir)
 
-   local images = seq.filter(function(path)
-      local filename = paths.basename(path)
-      local ext = string.match(filename, '%.(%a+)$')
-      return image.is_supported(ext)
+   return seq.filter(function(s)
+      local suffix = string.match(s.filename, '%.(%a+)$')
+      return image.is_supported(suffix)
    end,
    files)
+end
 
-   return path_seq(dir, images)
+
+-- Turn a data table into a pipeline source, producing samples.
+function pipe.data_table_source(table)
+   local dataset = dataset.TableDataset(table)
+   return dataset:sampler({shuffled = false})
+end
+
+
+-- Read data from a file on disk, returns a metadata table and a pipeline source.
+function pipe.disk_object_source(path)
+   local f = torch.DiskFile(path, 'r')
+   f:binary()
+
+   local size = f:readInt()
+   local metadata = f:readObject()
+   local count = 0
+
+   local src = function()
+      if count == size then
+         return nil
+      else
+         local sample = f:readObject()
+         count = count + 1
+         return sample
+      end
+   end
+
+   metadata.size = size
+   return src, metadata
+end
+
+
+
+--------------------------------------------------------------------------
+-- Pipeline Utilities
+--------------------------------------------------------------------------
+
+-- Load a data table from a file on disk.
+function pipe.data_table_from_file(path)
+   local md, src = pipe.disk_object_source(path)
+   return pipe.data_table_sink(md.size, src)
+end
+
+
+-- Play a movie by displaying samples out of src at frame rate fps.
+function pipe.animation_delay(fps)
+   return function(sample)
+      util.sleep(1.0 / fps)
+      return sample
+   end
+end
+
+
+-- Display a sample.
+function pipe.display(options)
+   local win
+   options = options or {zoom = 5}
+
+   return function(sample)
+      if sample == nil then return nil end
+
+      options.image = sample.data
+      options.win = win
+      win = image.display(options)
+      return sample
+   end
+end
+
+
+-- Pretty print a sample.
+function pipe.pprint(sample)
+   if sample == nil then return nil end
+
+   pprint(sample)
+   return sample
+end
+
+
+--------------------------------------------------------------------------
+-- Pipeline Sinks
+--------------------------------------------------------------------------
+
+-- Copy samples in a pipeline into a data table which will be one table
+-- with a tensor or table for each property of the samples.
+-- (e.g. 100 samples each with {data = <tensor> class = id} will result
+-- in one table with two tensors of size 100.)
+-- The dtable argument is optional, and can be passed if you want to write
+-- into an existing datatable, rather than allocating a new one.
+function pipe.data_table_sink(n, pipeline, dtable)
+   local sample = pipeline()
+
+   -- Inspect the first sample to determine tensor types and dimensions,
+   -- or reuse old dtable if available.
+   if dtable == nil then
+      dtable = {}
+
+      for k,v in pairs(sample) do
+         local store
+
+         if type(v) == 'number' then
+            store = torch.Tensor(n)
+         elseif util.is_tensor(v) then
+            store = torch.Tensor(unpack(util.concat({n}, v:size():totable())))
+         else
+            store = {}
+         end
+         dtable[k] = store
+      end
+   end
+
+   for i, sample in seq.take(n, seq.indexed(seq.concat({sample}, pipeline))) do
+      for k,v in pairs(sample) do
+         if type(v) == 'number' or util.is_tensor(v) then
+            dtable[k][i] = v
+         else
+            table.insert(dtable[k], v)
+         end
+      end
+   end
+
+   return dtable
+end
+
+
+-- Write a pipeline to disk.
+function pipe.disk_object_sink(path, metadata)
+   metadata = metadata or {}
+   local file = torch.DiskFile(path, 'w')
+   file:binary()
+
+   file:writeInt(0)
+   file:writeObject(metadata)
+
+   local count = 0
+
+   return function(sample)
+      if sample == nil then
+         print('end of sequence, writing size and closing file')
+         file:seek(1)
+         file:writeInt(count)
+         file:close()
+      else
+         file:writeObject(util.deep_copy(sample))
+         -- Once the force patch is accepted, we can switch to this:
+         --file:writeObject(sample, true)
+         count = count + 1
+      end
+
+      return sample
+   end
+end
+
+
+--------------------------------------------------------------------------
+-- Transformation stages
+--------------------------------------------------------------------------
+
+
+-- Convert from continuous to binary data.
+function pipe.binarize(sample)
+   sample.data = sample:gt(0.5):float()
+end
+
+
+-- Pad sample.data on all sides with value v.
+function pipe.pad_values(width, v)
+   return function(sample)
+      local new_sample = torch.Tensor(sample:size(1),
+                                      sample:size(2) + width*2,
+                                      sample:size(3) + width*2):fill(v)
+      new_sample:narrow(2, width+1, sample:size(2)):narrow(3, width+1, sample:size(3)):copy(sample)
+      sample.data = new_sample
+      return sample
+   end
 end
 
 
@@ -148,6 +345,24 @@ function pipe.rgb2yuv(sample)
    if sample == nil then return nil end
 
    sample.data = image.rgb2yuv(sample.data)
+   return sample
+end
+
+
+-- Flip sample.data vertically
+function pipe.flip_vertical(sample)
+   if sample == nil then return nil end
+
+   image.vflip(sample.data, sample.data:clone())
+   return sample
+end
+
+
+-- Flip sample.data horizontally
+function pipe.flip_horizontal(sample)
+   if sample == nil then return nil end
+
+   image.hflip(sample.data, sample.data:clone())
    return sample
 end
 
@@ -191,6 +406,16 @@ function pipe.patch_sampler(width, height)
 end
 
 
+-- Subtracts the mean and divides by the std for sample.data.
+function pipe.normalizer(sample)
+   local mean = sample.data:mean()
+   local std  = sample.data:std()
+   sample.data:add(-mean)
+   sample.data:mul(1.0 / std)
+   return sample
+end
+
+
 -- Using a gaussian kernel, locally subtract the mean and divide by standard
 -- deviation.  (Highlight edges and remove areas of low frequency...)
 -- e.g.
@@ -206,58 +431,6 @@ function pipe.spatial_normalizer(channel, radius, threshold, thresval)
       sample.data[{{channel},{},{}}]:copy(normalizer:forward(sample.data[{{channel},{},{}}]:float()))
       return sample
    end
-end
-
-
--- Divides sample.data values by a constant factor
-function pipe.div(n)
-   local factor = 1.0 / n
-   return function(sample)
-      sample.data:mul(factor)
-      return sample
-   end
-end
-
-
--- Subtracts the mean and divides by the std for sample.data.
-function pipe.normalizer(sample)
-   local mean = sample.data:mean()
-   local std  = sample.data:std()
-   sample.data:add(-mean)
-   sample.data:mul(1.0 / std)
-   return sample
-end
-
-
--- Play a movie by displaying samples out of src at frame rate fps.
-function pipe.movie_player(src, fps)
-   local movie_win
-
-   for sample in src do
-      movie_win = image.display({image = sample.data, win=movie_win, zoom=10})
-      util.sleep(1.0 / fps)
-   end
-end
-
-
-local display_win
-
--- Display a sample.
-function pipe.display(sample)
-   if sample == nil then return nil end
-
-   display_win = image.display({image = sample.data, win=display_win, zoom=10})
-
-   return sample
-end
-
-
--- Pretty print a sample.
-function pipe.pprint(sample)
-   if sample == nil then return nil end
-
-   pprint(sample)
-   return sample
 end
 
 
@@ -311,6 +484,27 @@ function pipe.type(t, key)
 end
 
 
+-- Divides sample.data values by a constant factor
+function pipe.div(n)
+   local factor = 1.0 / n
+   return function(sample)
+      sample.data:mul(factor)
+      return sample
+   end
+end
+
+
+-- Filter a sequence based on some field
+function pipe.filter(source, field, value)
+   return seq.filter(
+      function(sample)
+         return sample[field] == value
+      end,
+      source
+   )
+end
+
+
 -- Rotate input samples by r radians.
 function pipe.rotator(r)
    --local rotated = torch.Tensor()
@@ -360,31 +554,6 @@ function pipe.zoomer(dz)
 
       return sample
    end
-end
-
-
--- Animate input samples by sending them through an animation pipeline
--- iteratively for n_frames.  (So each input sample will result in an
--- animation that is n_frames samples long.)
-function pipe.animator(src, anim_line, n_frames)
-   local framer = function(start)
-      local frame = 1
-      local cur_sample = start
-      return function()
-         s = cur_sample
-         s.frame = frame
-         frame = frame + 1
-         local animated = anim_line(s)
-         cur_sample = util.deep_copy(animated)
-         return animated
-      end
-   end
-
-   return seq.mapcat(function(sample)
-                      print("sample.class: ", sample.class)
-                      return seq.take(n_frames, framer(sample))
-                    end,
-                    src)
 end
 
 
@@ -443,118 +612,3 @@ function Mnist:_animate(rotation, translation, zoom)
 end
 
 --]]
-
-
--- Copy samples in a pipeline into a data table which will be one table
--- with a tensor or table for each property of the samples.
--- (e.g. 100 samples each with {data = <tensor> class = id} will result
--- in one table with two tensors of size 100.)
--- The dtable argument is optional, and can be passed if you want to write
--- into an existing datatable, rather than allocating a new one.
-function pipe.to_data_table(n, pipeline, dtable)
-   local sample = pipeline()
-
-   -- Inspect the first sample to determine tensor types and dimensions,
-   -- or reuse old dtable if available.
-   if dtable == nil then
-      dtable = {}
-
-      for k,v in pairs(sample) do
-         local store
-
-         if type(v) == 'number' then
-            store = torch.Tensor(n)
-         elseif util.is_tensor(v) then
-            store = torch.Tensor(unpack(util.concat({n}, v:size():totable())))
-         else
-            store = {}
-         end
-         dtable[k] = store
-      end
-   end
-
-   for i, sample in seq.take(n, seq.indexed(seq.concat({sample}, pipeline))) do
-      for k,v in pairs(sample) do
-         if type(v) == 'number' or util.is_tensor(v) then
-            dtable[k][i] = v
-         else
-            table.insert(dtable[k], v)
-         end
-      end
-   end
-
-   return dtable
-end
-
-
--- Turn a data table into a pipeline source, producing samples.
-function pipe.data_table_source(table)
-   local dataset = dataset.TableDataset(table)
-   return dataset:sampler({shuffled = false})
-end
-
-
--- Filter a sequence based on some field
-function pipe.filter(source, field, value)
-   return seq.filter(
-      function(sample)
-         return sample[field] == value
-      end,
-      source
-   )
-end
-
-
--- Write a pipeline to disk.
-function pipe.write_to_disk(path, src, metadata)
-   metadata = metadata or {}
-   local file = torch.DiskFile(path, 'w')
-   file:binary()
-
-   file:writeInt(0)
-   file:writeObject(metadata)
-
-   local count = 0
-   for sample in src do
-      file:writeObject(sample)
-      count = count + 1
-   end
-
-   file:seek(1)
-   file:writeInt(count)
-   file:close()
-
-   return count
-end
-
-
--- Read data from a file on disk, returns a metadata table and a pipeline source.
-function pipe.file_source(path)
-   local f = torch.DiskFile(path, 'r')
-   f:binary()
-
-   local size = f:readInt()
-   local metadata = f:readObject()
-   local count = 0
-
-   local src = function()
-      if count == size then
-         return nil
-      else
-         local sample = f:readObject()
-         count = count + 1
-         return sample
-      end
-   end
-
-   metadata.size = size
-   return metadata, src
-end
-
-
--- Load a data table from a file on disk.
-function pipe.data_table_from_file(path)
-   local md, src = pipe.file_source(path)
-   return pipe.to_data_table(md.size, src)
-end
-

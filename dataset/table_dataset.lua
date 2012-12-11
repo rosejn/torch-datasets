@@ -200,5 +200,3 @@ function TableDataset:animations(options)
                   end,
                   indices)
 end
-
-
