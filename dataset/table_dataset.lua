@@ -2,6 +2,9 @@ require 'fn'
 require 'fn/seq'
 require 'util/arg'
 require 'dataset'
+require 'pprint'
+require 'debugger'
+
 local arg = util.arg
 
 local TableDataset = torch.class("dataset.TableDataset")
@@ -15,9 +18,6 @@ function TableDataset:__init(data_table, global_metadata)
 
    self._name = global_metadata.name
    self._classes = global_metadata.classes or {}
-
-    --util.set_index_fn(self, self.sample)
-    --util.set_size_fn(self, self.size)
 end
 
 
@@ -65,6 +65,58 @@ function TableDataset:sample(i)
 end
 
 
+local function animate(options, samples)
+   local rotation    = options.rotation or {}
+   local translation = options.translation or {}
+   local zoom        = options.zoom or {}
+   local frames      = options.frames or 10
+
+   local original = torch.Tensor()
+   local animated = torch.Tensor()
+
+   local function animate_sample(sample)
+      local transformers = {}
+      if (#rotation > 0) then
+         local rot_start, rot_finish = dataset.rand_pair(rotation[1], rotation[2])
+         rot_start = rot_start * math.pi / 180
+         rot_finish = rot_finish * math.pi / 180
+         local rot_delta = (rot_finish - rot_start) / frames
+         table.insert(transformers, dataset.rotator(rot_start, rot_delta))
+      end
+
+      if (#translation > 0) then
+         local xmin_tx, xmax_tx = dataset.rand_pair(translation[1], translation[2])
+         local ymin_tx, ymax_tx = dataset.rand_pair(translation[3], translation[4])
+         local dx = (xmax_tx - xmin_tx) / frames
+         local dy = (ymax_tx - ymin_tx) / frames
+         table.insert(transformers, dataset.translator(xmin_tx, ymin_tx, dx, dy))
+      end
+
+      if (#zoom > 0) then
+         local zoom_start, zoom_finish = dataset.rand_pair(zoom[1], zoom[2])
+         local zoom_delta = (zoom_finish - zoom_start) / frames
+         table.insert(transformers, dataset.zoomer(zoom_start, zoom_delta))
+      end
+
+      original:resizeAs(sample.data):copy(sample.data)
+      animated:resizeAs(sample.data)
+      return seq.repeatedly(frames,
+         function()
+            animated:zero()
+            local cur = original
+            for _, transform in ipairs(transformers) do
+               transform(cur, animated)
+               cur = animated
+            end
+            sample.data = animated
+            return sample
+         end)
+   end
+
+   return seq.mapcat(animate_sample, samples)
+end
+
+
 -- Returns an infinite sequence of data samples.  By default they
 -- are shuffled samples, but you can turn shuffling off.
 --
@@ -86,8 +138,15 @@ function TableDataset:sampler(options)
        else
            indices = seq.range(size)
        end
-       return seq.map(fn.partial(self.sample, self), indices)
-   end
+
+       local sample_seq = seq.map(fn.partial(self.sample, self), indices)
+
+       if options.animate then
+          return animate(options.animate, sample_seq)
+       else
+          return sample_seq
+       end
+    end
 
    return seq.flatten(seq.cycle(seq.repeatedly(make_sampler)))
 end

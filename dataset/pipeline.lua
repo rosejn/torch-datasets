@@ -284,16 +284,16 @@ function pipe.disk_object_sink(path, metadata)
 
    return function(sample)
       if sample == nil then
-         print('end of sequence, writing size and closing file')
+         --print('end of sequence, writing size and closing file')
          file:seek(1)
          file:writeInt(count)
          file:close()
       else
-         --file:writeObject(util.deep_copy(sample))
+         file:writeObject(util.deep_copy(sample))
          -- Once the force patch is accepted, we can switch to this:
-         file:writeObject(sample, true)
+         --file:writeObject(sample, true)
          count = count + 1
-         print("wrote object: ", count)
+         --print("wrote object: ", count)
       end
 
       return sample

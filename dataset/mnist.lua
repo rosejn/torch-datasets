@@ -120,7 +120,7 @@ function Mnist.dataset(opts)
       data = Mnist.raw_data(size)
    end
    local samples = data:narrow(2, 1, Mnist.n_dimensions):clone()
-   samples:resize(Mnist.size, unpack(Mnist.dimensions))
+   samples:resize(size, unpack(Mnist.dimensions))
 
    local labels = torch.Tensor(size)
    for i=1,size do
@@ -153,57 +153,6 @@ end
 
 
 --[[
-function Mnist:_animate(rotation, translation, zoom)
-   local full_size = self.frames * self.size
-   local animated = torch.Tensor(full_size, Mnist.n_dimensions):zero()
-   local animated_labels = torch.Tensor(full_size)
-
-   for i=1,self.size do
-      for f=1,self.frames do
-         animated_labels[1 + (i-1)*self.frames + (f-1)] = self.labels[i]
-      end
-   end
-
-   for sample=1,self.size do
-      local transformers = {}
-      if (#rotation > 0) then
-         local rot_start, rot_finish = dataset.rand_pair(rotation[1], rotation[2])
-         rot_start = rot_start * math.pi / 180
-         rot_finish = rot_finish * math.pi / 180
-         local rot_delta = (rot_finish - rot_start) / self.frames
-         table.insert(transformers, dataset.rotator(rot_start, rot_delta))
-         self.rotation = rotation
-      end
-
-      if (#translation > 0) then
-         local xmin_tx, xmax_tx = dataset.rand_pair(translation[1], translation[2])
-         local ymin_tx, ymax_tx = dataset.rand_pair(translation[3], translation[4])
-         local dx = (xmax_tx - xmin_tx) / frames
-         local dy = (ymax_tx - ymin_tx) / frames
-         table.insert(transformers, dataset.translator(xmin_tx, ymin_tx, dx, dy))
-         self.translation = translation
-      end
-
-      if (#zoom > 0) then
-         local zoom_start, zoom_finish = dataset.rand_pair(zoom[1], zoom[2])
-         local zoom_delta = (zoom_finish - zoom_start) / self.frames
-         table.insert(transformers, dataset.zoomer(zoom_start, zoom_delta))
-         self.zoom = zoom
-      end
-
-      local src = self.samples[sample]:unfold(1, 28, 28)
-      for f=1,self.frames do
-         local dst = animated:narrow(1, (sample-1)*self.frames + f, 1):select(1,1):unfold(1, 28, 28)
-         local tsrc = src
-         for _, transform in ipairs(transformers) do
-            transform(tsrc, dst)
-            tsrc = dst
-         end
-      end
-   end
-end
-
-
 -- Returns the sequence of frames corresponding to a specific sample's animation.
 --
 --   for frame,label in m:animation(1) do

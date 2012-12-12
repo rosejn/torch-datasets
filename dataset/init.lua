@@ -80,3 +80,49 @@ function dataset.sort_by_class(samples, labels)
     return sorted_samples, sorted_labels
 end
 
+
+function dataset.rotator(start, delta)
+   local angle = start
+   return function(src, dst)
+      image.rotate(dst, src, angle)
+      angle = angle + delta
+   end
+end
+
+
+function dataset.translator(startx, starty, dx, dy)
+   local started = false
+   local cx = startx
+   local cy = starty
+   return function(src, dst)
+      image.translate(dst, src, cx, cy)
+      cx = cx + dx
+      cy = cy + dy
+   end
+end
+
+
+function dataset.zoomer(start, dz)
+   local factor = start
+   return function(src, dst)
+      local src_width  = src:size(2)
+      local src_height = src:size(3)
+      local width      = math.floor(src_width * factor)
+      local height     = math.floor(src_height * factor)
+
+      local res = image.scale(src, width, height)
+      if factor > 1 then
+         local sx = math.floor((width - src_width) / 2)+1
+         local sy = math.floor((height - src_height) / 2)+1
+         dst:copy(res:narrow(2, sx, src_width):narrow(3, sy, src_height))
+      else
+         local sx = math.floor((src_width - width) / 2)+1
+         local sy = math.floor((src_height - height) / 2)+1
+         dst:zero()
+         dst:narrow(2, sx,  width):narrow(3, sy, height):copy(res)
+      end
+
+      factor = factor + dz
+   end
+end
+
