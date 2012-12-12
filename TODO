@@ -1,11 +1,18 @@
 * create a pipeline from table of options
+
 * support transforming dataset either once on construction or for every sample
 or mini-batch on the fly
+
 * add fully randomized mini-batches (copy in samples)
+
 * implement randomized animations
 
--- * modify these to be random transforms that take {min,max}
--- * use old mnist animate function to add randomized animation support
--- * add pipeline args to TableDataset, sampler
--- * modify sampler to take a batch size, and option for truly random batches
+* modify animation transforms to be random transforms that take {min,max}
 
+* use old mnist animate function to add randomized animation support
+
+* add pipeline args to TableDataset, sampler
+
+* modify sampler to take a batch size, and option for truly random batches
+
+* add ability to request items by class, or get a class specific sampler
