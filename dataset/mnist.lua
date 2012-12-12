@@ -75,40 +75,15 @@ end
 --   -- only import a subset of the data (imports full 60,000 samples otherwise)
 --   m = dataset.Mnist({size = 1000})
 --
---   -- optionally animate mnist digits using translation, rotation, and
---   -- scaling over a certain number of frames.
---   m = dataset.Mnist{frames = frames,
---                     rotation = {-20, 20},
---                     zoom = {0.3, 1.5},
---                     translation = {-8, 8, -8, 8}
---                    }
---
 --   -- use the test data rather than the training data:
 --   m = dataset.Mnist({test = true})
 function Mnist.dataset(opts)
    local scale, normalize, size, frames, rotation, translation, zoom
-   --[[ TODO: dok.unpack seems broken...
-
-   local _, scale, normalize, size, frames, rotation, translation, zoom = dok.unpack({...},
-         'Mnist:__init',
-         'returns a pre-processed MNIST dataset',
-         {arg='scale',       type='table',   help='scale dataset within a range {min, max}', default={}},
-         {arg='normalize',   type='boolean', help='apply global normalization => (data - mean) / std', default=false},
-         {arg='size',        type='number',  help='specify a size if you only want a subset of the data', default=Mnist.size},
-         {arg='frames',      type='number',  help='specify the number of frames to animate each sample', default=10},
-         {arg='rotation',    type='table',   help='rotation parameters = {min, max}', default=nil},
-         {arg='translation', type='table',   help='translation parameters = {xmin, xmax, ymin, ymax}', default=nil},
-         {arg='zoom',        type='table',   help='scaling parameters = {min, max}', default=nil})
-         ]]
    opts        = opts or {}
    test        = arg.optional(opts, 'test', false)
    scale       = arg.optional(opts, 'scale', {})
    normalize   = arg.optional(opts, 'normalize', false)
    size        = arg.optional(opts, 'size', test and Mnist.test_size or Mnist.size)
-   frames      = arg.optional(opts, 'frames', 10)
-   rotation    = arg.optional(opts, 'rotation', {})
-   translation = arg.optional(opts, 'translation', {})
-   zoom        = arg.optional(opts, 'zoom', {})
    sort        = arg.optional(opts, 'sort', false)
 
    local transformations = {}
@@ -145,53 +120,5 @@ function Mnist.dataset(opts)
        class = labels
    }
 
-   --if (#rotation > 0) or (#translation > 0) or (#zoom > 0) then
-   --   self:_animate(rotation, translation, zoom)
-   --end
    return dataset.TableDataset(d, Mnist)
 end
-
-
---[[
--- Returns the sequence of frames corresponding to a specific sample's animation.
---
---   for frame,label in m:animation(1) do
---      local img = frame:unfold(1,28,28)
---      win = image.display({win=win, image=img, zoom=10})
---      util.sleep(1 / 24)
---   end
---
-function Mnist:animation(i)
-   local start = ((i-1) * self.frames) + 1
-   return self:mini_batch(start, self.frames, {sequence = true})
-end
-
-
--- Returns a sequence of animations, where each animation is a sequence of
--- samples.
---
---   for anim in m:animations() do
---      for frame,label in anim do
---         local img = frame:unfold(1,28,28)
---         win = image.display({win=win, image=img, zoom=10})
---         util.sleep(1 / 24)
---      end
---   end
---
-function Mnist:animations(options)
-   options = options or {}
-   local shuffled = arg.optional(options, 'shuffled', true)
-   local indices
-
-   if shuffled then
-      indices = torch.randperm(self.base_size)
-   else
-      indices = seq.range(self.base_size)
-   end
-   return seq.map(function(i)
-                     return self:animation(i)
-                  end,
-                  indices)
-end
-
---]]

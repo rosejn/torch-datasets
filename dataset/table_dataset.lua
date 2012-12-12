@@ -154,6 +154,8 @@ function TableDataset:sampler(options)
    local indices
    local size = self:size()
 
+   local pipeline, pipe_size = pipe.construct_pipeline(options)
+
    local function make_sampler()
        if shuffled then
            indices = torch.randperm(size)
@@ -164,10 +166,13 @@ function TableDataset:sampler(options)
        local sample_seq = seq.map(fn.partial(self.sample, self), indices)
 
        if options.animate then
-          return animate(options.animate, sample_seq)
-       else
-          return sample_seq
+          sample_seq = animate(options.animate, sample_seq)
        end
+
+       if pipe_size > 0 then
+          sample_seq = seq.map(pipeline, sample_seq)
+       end
+
     end
 
    return seq.flatten(seq.cycle(seq.repeatedly(make_sampler)))

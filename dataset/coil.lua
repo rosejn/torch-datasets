@@ -101,3 +101,4 @@ function Coil.dataset(options)
    return dataset.TableDataset(table, Coil)
 end
 
+

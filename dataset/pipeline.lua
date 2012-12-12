@@ -614,7 +614,7 @@ function pipe.construct_pipeline(opts)
    end
 
    --print("}")
-   return pipe.line(stages)
+   return pipe.line(stages), #stages
 end
 
 
