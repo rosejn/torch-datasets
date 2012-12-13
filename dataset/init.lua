@@ -66,9 +66,6 @@ end
 function dataset.rand_pair(v_min, v_max)
    local a = dataset.rand_between(v_min, v_max)
    local b = dataset.rand_between(v_min, v_max)
-   --local start = math.min(a, b)
-   --local finish = math.max(a, b)
-   --return start, finish
    return a,b
 end
 
@@ -88,6 +85,7 @@ end
 
 function dataset.rotator(start, delta)
    local angle = start
+   --print("rotator: ", start, delta)
    return function(src, dst)
       image.rotate(dst, src, angle)
       angle = angle + delta
@@ -99,6 +97,7 @@ function dataset.translator(startx, starty, dx, dy)
    local started = false
    local cx = startx
    local cy = starty
+   --print("translator: ", startx, starty, dx, dy)
    return function(src, dst)
       image.translate(dst, src, cx, cy)
       cx = cx + dx
@@ -109,6 +108,7 @@ end
 
 function dataset.zoomer(start, dz)
    local factor = start
+   --print("zoomer: ", dz)
    return function(src, dst)
       local src_width  = src:size(2)
       local src_height = src:size(3)

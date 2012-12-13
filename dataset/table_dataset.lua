@@ -2,8 +2,8 @@ require 'fn'
 require 'fn/seq'
 require 'util/arg'
 require 'dataset'
+require 'dataset/pipeline'
 require 'pprint'
-require 'debugger'
 
 local arg = util.arg
 
@@ -93,7 +93,6 @@ local function animate(options, samples)
    local zoom        = options.zoom or {}
    local frames      = options.frames or 10
 
-   local original = torch.Tensor()
    local animated = torch.Tensor()
 
    local function animate_sample(sample)
@@ -120,7 +119,7 @@ local function animate(options, samples)
          table.insert(transformers, dataset.zoomer(zoom_start, zoom_delta))
       end
 
-      original:resizeAs(sample.data):copy(sample.data)
+      local original = sample.data
       animated:resizeAs(sample.data)
       return seq.repeatedly(frames,
          function()
@@ -173,6 +172,7 @@ function TableDataset:sampler(options)
           sample_seq = seq.map(pipeline, sample_seq)
        end
 
+       return sample_seq
     end
 
    return seq.flatten(seq.cycle(seq.repeatedly(make_sampler)))
@@ -287,3 +287,8 @@ function TableDataset:animations(options)
                   indices)
 end
 
+
+-- Return a pipeline source (i.e. a sequence of samples).
+function TableDataset:pipeline_source()
+   return self:sampler({shuffled = false})
+end
