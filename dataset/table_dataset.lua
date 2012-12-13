@@ -3,7 +3,6 @@ require 'fn/seq'
 require 'util/arg'
 require 'dataset'
 require 'pprint'
-require 'debugger'
 
 local arg = util.arg
 
