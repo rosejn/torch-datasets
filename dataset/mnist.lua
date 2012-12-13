@@ -112,7 +112,6 @@ function Mnist.dataset(opts)
 
    if (#scale == 2) then
        dataset.scale(samples, scale[1], scale[2])
-       --table.insert(transformations, pipe.scaler(scale[1], scale[2]))
    end
 
    local d = {
