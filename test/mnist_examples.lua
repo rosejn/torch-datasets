@@ -36,9 +36,8 @@ function test_animation()
    local i = 0
    for sample in seq.take(200, s) do
       i = i + 1
-      print(sample.class)
       win = image.display({win=win, image=sample.data, zoom=4})
-      util.sleep(0.1 + 1 / fps)
+      util.sleep(1 / fps)
    end
 end
 

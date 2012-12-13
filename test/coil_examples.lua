@@ -46,9 +46,11 @@ end
 
 function coil_from_scratch()
    local d = Coil.dataset({size = 20, yuv = true, normalize = true})
-   pprint(d)
    s = d:sampler()
-   image.display({image = s().data, zoom = 4})
+   sample = s()
+   print("sample:")
+   pprint(sample)
+   image.display({image = sample.data, zoom = 4})
 end
 
 --coil_from_images()
