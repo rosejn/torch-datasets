@@ -30,7 +30,7 @@ function test_animation()
       zoom        = {0.6, 1.4}
    }
 
-   s = d:sampler({animate = anim_options})
+   s = d:sampler({animate = anim_options, pad = 10, binarize = true})
 
    local win
    local i = 0

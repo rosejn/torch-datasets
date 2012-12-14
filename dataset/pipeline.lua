@@ -421,7 +421,8 @@ end
 
 -- Convert from continuous to binary data.
 function pipe.binarize(sample)
-   sample.data = sample:gt(0.5):float()
+   sample.data = sample.data:gt(0.5):float()
+   return sample
 end
 
 
@@ -430,11 +431,11 @@ function pipe.pad_values(width, v)
    v = v or 0
 
    return function(sample)
-      local new_sample = torch.Tensor(sample:size(1),
-                                      sample:size(2) + width*2,
-                                      sample:size(3) + width*2):fill(v)
-      new_sample:narrow(2, width+1, sample:size(2)):narrow(3, width+1, sample:size(3)):copy(sample)
-      sample.data = new_sample
+      local padded = torch.Tensor(sample.data:size(1),
+                                      sample.data:size(2) + width*2,
+                                      sample.data:size(3) + width*2):fill(v)
+      padded:narrow(2, width+1, sample.data:size(2)):narrow(3, width+1, sample.data:size(3)):copy(sample.data)
+      sample.data = padded
       return sample
    end
 end
@@ -581,17 +582,15 @@ function pipe.construct_pipeline(opts)
       local opt_val = opts[name]
       if opt_val then
 
-         local args
-         if opt_val == true then
-            args = {}
-         elseif util.is_table(opt_val) then
+         local args = {}
+         if util.is_table(opt_val) then
             args = opt_val
          elseif util.is_number(opt_val) then
             args = {opt_val}
          end
 
          local transform
-         if #args == 0 then
+         if args ~= nil and #args == 0 then
             transform = fn
          else
             transform = fn(unpack(args))
