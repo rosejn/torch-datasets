@@ -59,9 +59,9 @@ randomly rotate, translate, and/or zoom within the ranges passed.
      s = dataset:sampler({animate = anim_options})
 
 
-Standard pipeline options can be used to add post-processing stages:
+Standard pipeline options can be used to add post-processing stages (e.g. binarize and flatten):
 
-     s = dataset:sampler({pad = 5, binarize = true, type = 'float'})
+     s = dataset:sampler({pad = 5, binarize = true, flatten = true})
 
 
 Pass a custom pipeline for processing samples:

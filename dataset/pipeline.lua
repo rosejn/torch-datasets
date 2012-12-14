@@ -556,9 +556,19 @@ function pipe.zoomer(dz)
 end
 
 
+-- Flatten the sample.data tensor to be 1D.
+function pipe.flatten(sample)
+   sample.data = sample.data:resize(sample.data:nElement())
+   return sample
+end
+
+
 pipe.arg_map = {
    {'resize',          pipe.resizer},
    {'crop',            pipe.cropper},
+   {'rotate',          pipe.rotator},
+   {'translate',       pipe.translator},
+   {'zoom',            pipe.zoomer},
    {'patches',         pipe.patch_sampler},
    {'flip_vertical',   pipe.flip_vertical},
    {'flip_horizontal', pipe.flip_horizontal},
@@ -569,6 +579,7 @@ pipe.arg_map = {
    {'binarize',        pipe.binarize},
    {'pad',             pipe.pad_values},
    {'type',            pipe.type},
+   {'flatten',         pipe.flatten},
 }
 
 

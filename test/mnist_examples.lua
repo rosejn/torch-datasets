@@ -30,13 +30,13 @@ function test_animation()
       zoom        = {0.6, 1.4}
    }
 
-   s = d:sampler({animate = anim_options, pad = 10, binarize = true})
+   s = d:sampler({animate = anim_options, pad = 10, binarize = true, flatten = true})
 
    local win
    local i = 0
    for sample in seq.take(200, s) do
       i = i + 1
-      win = image.display({win=win, image=sample.data, zoom=4})
+      win = image.display({win=win, image=sample.data:unfold(1, 48, 48), zoom=4})
       util.sleep(1 / fps)
    end
 end
