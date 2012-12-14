@@ -66,9 +66,6 @@ end
 function dataset.rand_pair(v_min, v_max)
    local a = dataset.rand_between(v_min, v_max)
    local b = dataset.rand_between(v_min, v_max)
-   --local start = math.min(a, b)
-   --local finish = math.max(a, b)
-   --return start, finish
    return a,b
 end
 

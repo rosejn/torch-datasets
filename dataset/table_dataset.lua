@@ -2,6 +2,7 @@ require 'fn'
 require 'fn/seq'
 require 'util/arg'
 require 'dataset'
+require 'dataset/pipeline'
 require 'pprint'
 
 local arg = util.arg
@@ -92,8 +93,8 @@ local function animate(options, samples)
    local zoom        = options.zoom or {}
    local frames      = options.frames or 10
 
-   local original = torch.Tensor()
-   local animated = torch.Tensor()
+   local scratch_a = torch.Tensor()
+   local scratch_b = torch.Tensor()
 
    local function animate_sample(sample)
       local transformers = {}
@@ -119,17 +120,24 @@ local function animate(options, samples)
          table.insert(transformers, dataset.zoomer(zoom_start, zoom_delta))
       end
 
-      original:resizeAs(sample.data):copy(sample.data)
-      animated:resizeAs(sample.data)
+      local original = sample.data
+      scratch_a:resizeAs(sample.data)
+      scratch_b:resizeAs(sample.data)
       return seq.repeatedly(frames,
          function()
-            animated:zero()
-            local cur = original
+            scratch_a:zero()
+            local a = original
+            local b = scratch_b
             for _, transform in ipairs(transformers) do
-               transform(cur, animated)
-               cur = animated
+               transform(a, b)
+               a = b
+               if a == scratch_a then
+                  b = scratch_b
+               else
+                  b = scratch_a
+               end
             end
-            sample.data = animated
+            sample.data = a
             return sample
          end)
    end
@@ -147,6 +155,20 @@ end
 --
 --   -- turn off shuffling
 --   sampler = dataset:sampler({shuffled = false})
+--
+--   -- generate animations over 10 frames for each sample, which will
+--   -- randomly rotate, translate, and/or zoom within the ranges passed.
+--   local anim_options = {
+--      frames      = 10,
+--      rotation    = {-20, 20},
+--      translation = {-5, 5, -5, 5},
+--      zoom        = {0.6, 1.4}
+--   }
+--   s = dataset:sampler({animate = anim_options})
+--
+--   -- pass a custom pipeline for post-processing samples
+--   s = dataset:sampler({pipeline = my_pipeline})
+--
 function TableDataset:sampler(options)
    options = options or {}
    local shuffled = arg.optional(options, 'shuffled', true)
@@ -172,6 +194,11 @@ function TableDataset:sampler(options)
           sample_seq = seq.map(pipeline, sample_seq)
        end
 
+       if options.pipeline then
+          sample_seq = seq.map(options.pipeline, sample_seq)
+       end
+
+       return sample_seq
     end
 
    return seq.flatten(seq.cycle(seq.repeatedly(make_sampler)))
@@ -286,3 +313,8 @@ function TableDataset:animations(options)
                   indices)
 end
 
+
+-- Return a pipeline source (i.e. a sequence of samples).
+function TableDataset:pipeline_source()
+   return self:sampler({shuffled = false})
+end

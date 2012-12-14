@@ -18,6 +18,7 @@ function test_sampler()
    end
 end
 
+
 function test_animation()
    local fps = 30
 
@@ -39,5 +40,6 @@ function test_animation()
       util.sleep(1 / fps)
    end
 end
+
 
 test_animation()

@@ -6,7 +6,6 @@ require 'pprint'
 require 'util'
 require 'fn'
 require 'fn/seq'
-require 'dataset/table_dataset'
 
 -- A dataset pipeline system, allowing for easy loading and transforming of
 -- datasets.  A pipeline processes individual samples, which are just tables of
@@ -148,13 +147,6 @@ function pipe.image_dir_source(dir)
 end
 
 
--- Turn a data table into a pipeline source, producing samples.
-function pipe.data_table_source(table)
-   local dataset = dataset.TableDataset(table)
-   return dataset:sampler({shuffled = false})
-end
-
-
 -- Read data from a file on disk, returns a metadata table and a pipeline source.
 function pipe.disk_object_source(path)
    local f = torch.DiskFile(path, 'r')
@@ -222,6 +214,17 @@ function pipe.pprint(sample)
 
    pprint(sample)
    return sample
+end
+
+
+-- Filter a sequence based on some field
+function pipe.filter(source, field, value)
+   return seq.filter(
+      function(sample)
+         return sample[field] == value
+      end,
+      source
+   )
 end
 
 
@@ -500,17 +503,6 @@ function pipe.div(n)
 end
 
 
--- Filter a sequence based on some field
-function pipe.filter(source, field, value)
-   return seq.filter(
-      function(sample)
-         return sample[field] == value
-      end,
-      source
-   )
-end
-
-
 -- Rotate input samples by r radians.
 function pipe.rotator(r)
    --local rotated = torch.Tensor()
@@ -582,16 +574,12 @@ pipe.arg_map = {
 function pipe.construct_pipeline(opts)
    local stages = {}
 
-   --print("{")
    for stage in seq.seq(pipe.arg_map) do
       local name = stage[1]
       local fn   = stage[2]
 
-      --print("name: ", name)
-
-      opt_val = opts[name]
+      local opt_val = opts[name]
       if opt_val then
-         --print("val: ", opt_val)
 
          local args
          if opt_val == true then
@@ -609,11 +597,9 @@ function pipe.construct_pipeline(opts)
             transform = fn(unpack(args))
          end
          table.insert(stages, transform)
-         --print(string.format("  %s(%s)", name, pretty_string(args)))
       end
    end
 
-   --print("}")
    return pipe.line(stages), #stages
 end
 
