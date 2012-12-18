@@ -103,7 +103,7 @@ end
 local function process_pairs(pair_format)
 
 	local function half(n)
-		return function(sample) sample.data = sample.data[n] return sample end
+		return function(sample) sample.data = sample.data:narrow(1,n,n) return sample end
 	end
 
 	return function(stages)
