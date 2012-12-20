@@ -76,10 +76,9 @@ end
 local function normalize(enabled)
 	return function(stages)
 		if enabled then
-			table.insert(stages, pipe.normalize)
-		else
-			return stages
+			table.insert(stages, pipe.normalizer)
 		end
+		return stages
 	end
 end
 
