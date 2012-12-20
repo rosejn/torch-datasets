@@ -189,7 +189,7 @@ function SmallNorb.dataset(opt)
 
 	opt = opt or {}
 
-	local test              = arg.optional(opts, 'test', false)
+	local test              = arg.optional(opt, 'test', false)
 	local n_frames          = arg.optional(opt, 'n_frames', SmallNorb.size/2)
 	local pair_format       = arg.optional(opt, 'pairs', 'combined')
 	local class             = arg.optional(opt, 'class')
