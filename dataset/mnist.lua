@@ -83,6 +83,7 @@ function Mnist.dataset(opts)
    test        = arg.optional(opts, 'test', false)
    scale       = arg.optional(opts, 'scale', {})
    normalize   = arg.optional(opts, 'normalize', false)
+   zca_whiten  = arg.optional(opts, 'zca_whiten', false)
    size        = arg.optional(opts, 'size', test and Mnist.test_size or Mnist.size)
    sort        = arg.optional(opts, 'sort', false)
 
@@ -108,6 +109,10 @@ function Mnist.dataset(opts)
 
    if normalize then
        mean, std = dataset.global_normalization(samples)
+   end
+
+   if zca_whiten then
+       dataset.zca_whiten(samples)
    end
 
    if (#scale == 2) then

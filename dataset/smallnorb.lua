@@ -52,6 +52,88 @@ end
 
 
 
+
+local function printImageStats(data, _name, noGUI)
+	local name = _name or ''
+
+	-- print stats
+	print(' ')
+	print(name)
+	print{data}
+	print('Stats:')
+	print('Min('..name..'): ', torch.min(data))
+	print('Mean('..name..'): ', torch.mean(data))
+	print('Max('..name..'): ', torch.max(data))
+	print('Std('..name..'): ', torch.std(data))
+	print(' ')
+	
+	if noGUI then
+		local data = data:unfold(2, 32, 32)
+		image.display({image=data[{{1, 144}, {}, {}}], nrow = 16,  symmetric=true, min=-5, max=5, zoom=1, legend=name, padding=2})
+		--image.display({image=data[{{1, 144}, {}, {}}], nrow = 16, zoom=3, legend=name, padding=2})
+		--image.display({image=data[{{1, 3600}, {}, {}}], nrow = 16*5, symmetric=true, min=-5, max=5, legend=name, padding=2})
+		--image.display({image=data[{{1, 3600}, {}, {}}], nrow = 16*5, legend=name, padding=2})
+	end
+end
+
+
+function printMatStats(data, _name, noGUI)
+	local name = _name or ''
+
+	-- print stats
+	print('')
+	print(name)
+	print{data}
+	print('Stats:')
+	print('Min('..name..'): ', torch.min(data))
+	print('Mean('..name..'): ', torch.mean(data))
+	print('Max('..name..'): ', torch.max(data))
+	print('Std('..name..'): ', torch.std(data))
+	print(' ')
+	
+	if noGUI then
+		image.display({image=data, symmetric=true, legend=name})
+	end
+
+end
+
+
+
+-- ZCA-Whitening 
+local function zca_whiten(sample)
+
+	local display = true
+
+	local dims = sample.data:size()
+	local nsamples = dims[1]
+	local n_dimensions = dims[2] * dims[3] * dims[4]
+	
+	require 'unsup'
+	-- compute the covariance matrix by hand
+	local mdata = sample.data:clone():reshape(nsamples, n_dimensions)
+	printImageStats(mdata, 'mdata', display)
+	mdata:add(torch.ger(torch.ones(nsamples), torch.mean(mdata, 1):squeeze()):mul(-1))
+	local covdata = torch.mm(mdata:t(), mdata)
+	--printImageStats(sample.data, 'data', display)
+	printMatStats(covdata, 'covdata', display)
+	local ce, cv = unsup.pcacov(sample.data:reshape(nsamples, n_dimensions))
+	local val = ce:clone():add(1e-1):sqrt():pow(-1)
+	local diag = torch.diag(val)
+	local P = torch.mm(cv, diag)
+	P = torch.mm(P, cv:t())
+	local wdata = torch.mm(mdata, P)
+	printImageStats(wdata, 'wdata', display)
+	local mwdata = wdata:clone():add(torch.ger(torch.ones(nsamples), torch.mean(wdata, 1):squeeze()):mul(-1))
+	local covwdata = torch.mm(mwdata:t(), mwdata)
+	printMatStats(covwdata, 'covwdata', display)
+	print(dims)
+	print{wdata}
+	sample.data:copy(wdata:reshape(dims[1], dims[2], dims[3], dims[4]):typeAs(sample.data))
+end
+
+
+
+
 --[[ Split metadata into separate fields
 
 The fields are:
@@ -195,6 +277,7 @@ function SmallNorb.dataset(opt)
 	local class             = arg.optional(opt, 'class')
 	local downsample_factor = arg.optional(opt, 'downsample')
 	local do_normalize      = arg.optional(opt, 'normalize', false)
+	local do_zca_whiten     = arg.optional(opt, 'zca_whiten', false)
 	local instance          = arg.optional(opt, 'instance')
 	local elevation         = arg.optional(opt, 'elevation')
 	local azimuth           = arg.optional(opt, 'azimuth')
@@ -238,6 +321,11 @@ function SmallNorb.dataset(opt)
 
 	local pipeline = pipe.pipeline(unpack(stages))
 	local table = pipe.data_table_sink(n_frames, pipeline)
+	
+
+	if do_zca_whiten then
+		zca_whiten(table)
+	end
 
 	return dataset.TableDataset(table, SmallNorb)
 end
