@@ -12,6 +12,8 @@ local arg = util.arg
 
 require 'dataset'
 require 'dataset/table_dataset'
+require 'dataset/whitening'
+
 
 Mnist = {}
 
@@ -83,6 +85,7 @@ function Mnist.dataset(opts)
    test        = arg.optional(opts, 'test', false)
    scale       = arg.optional(opts, 'scale', {})
    normalize   = arg.optional(opts, 'normalize', false)
+   do_zca_whiten  = arg.optional(opts, 'zca_whiten', false)
    size        = arg.optional(opts, 'size', test and Mnist.test_size or Mnist.size)
    sort        = arg.optional(opts, 'sort', false)
 
@@ -110,8 +113,18 @@ function Mnist.dataset(opts)
        mean, std = dataset.global_normalization(samples)
    end
 
+
    if (#scale == 2) then
        dataset.scale(samples, scale[1], scale[2])
+   end
+
+
+   -- TODO: refactor the whole mnist dataset and get rid of this trick
+   if do_zca_whiten then
+	local table = {}
+	table.data = samples
+       dataset.zca_whiten(table)
+       samples = table.data
    end
 
    local d = {

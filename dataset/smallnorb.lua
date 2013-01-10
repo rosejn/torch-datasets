@@ -17,6 +17,7 @@ require 'dataset/pipeline'
 require 'dataset/lushio'
 require 'dataset/table_dataset'
 
+require 'dataset/whitening'
 
 SmallNorb = {}
 
@@ -49,7 +50,6 @@ local function raw_data(filename, toTensor)
 	local bin_matrix = dataset.data_path(SmallNorb.name, SmallNorb.url .. filename .. '.gz', filename, unzip)
 	return lushio.read(bin_matrix)
 end
-
 
 
 --[[ Split metadata into separate fields
@@ -195,6 +195,7 @@ function SmallNorb.dataset(opt)
 	local class             = arg.optional(opt, 'class')
 	local downsample_factor = arg.optional(opt, 'downsample')
 	local do_normalize      = arg.optional(opt, 'normalize', false)
+	local do_zca_whiten     = arg.optional(opt, 'zca_whiten', false)
 	local instance          = arg.optional(opt, 'instance')
 	local elevation         = arg.optional(opt, 'elevation')
 	local azimuth           = arg.optional(opt, 'azimuth')
@@ -238,6 +239,11 @@ function SmallNorb.dataset(opt)
 
 	local pipeline = pipe.pipeline(unpack(stages))
 	local table = pipe.data_table_sink(n_frames, pipeline)
+	
+
+	if do_zca_whiten then
+		dataset.zca_whiten(table)
+	end
 
 	return dataset.TableDataset(table, SmallNorb)
 end
