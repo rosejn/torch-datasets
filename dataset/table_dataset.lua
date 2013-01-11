@@ -20,7 +20,7 @@ local TableDataset = torch.class("dataset.TableDataset")
 --   -- a 'dataset' of random samples with random class labels
 --   data_table = {
 --     data  = torch.Tensor(10, 20, 20),
---     class = torch.randperm(10)
+--     classes = torch.randperm(10)
 --   }
 --   metadata = { name = 'random', classes = {1,2,3,4,5,6,7,8,9,10} }
 --   dataset = TableDataset(data_table, metadata)
