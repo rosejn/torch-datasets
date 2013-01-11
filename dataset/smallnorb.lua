@@ -15,6 +15,7 @@ package.path = '?/init.lua;' .. package.path
 require 'dataset'
 require 'dataset/pipeline'
 require 'dataset/lushio'
+require 'dataset/table_dataset'
 
 
 SmallNorb = {}
@@ -75,10 +76,9 @@ end
 local function normalize(enabled)
 	return function(stages)
 		if enabled then
-			table.insert(stages, pipe.normalize)
-		else
-			return stages
+			table.insert(stages, pipe.normalizer)
 		end
+		return stages
 	end
 end
 
@@ -89,7 +89,7 @@ local function downsample(factor)
 		if factor ~= nil then
 			local width = SmallNorb.dimensions[3] / factor
 			local height = SmallNorb.dimensions[2] / factor
-			table.insert(stages, pipe.scaler(width, height))
+			table.insert(stages, pipe.resizer(width, height))
 			return stages
 		else
 			return stages
@@ -102,7 +102,7 @@ end
 local function process_pairs(pair_format)
 
 	local function half(n)
-		return function(sample) sample.data = sample.data[n] return sample end
+		return function(sample) sample.data = sample.data:narrow(1,n,n) return sample end
 	end
 
 	return function(stages)
@@ -189,7 +189,7 @@ function SmallNorb.dataset(opt)
 
 	opt = opt or {}
 
-	local test              = arg.optional(opts, 'test', false)
+	local test              = arg.optional(opt, 'test', false)
 	local n_frames          = arg.optional(opt, 'n_frames', SmallNorb.size/2)
 	local pair_format       = arg.optional(opt, 'pairs', 'combined')
 	local class             = arg.optional(opt, 'class')
@@ -219,7 +219,7 @@ function SmallNorb.dataset(opt)
 
 	-- TODO: verify that arguments are valid
 	local source = fn.thread(
-		pipe.data_table_source(raw),
+		dataset.TableDataset(raw):sampler{shuffled = false},
 		filter(class, 'classes', class_id),
 		filter(instance, 'instance'),
 		filter(elevation, 'elevation'),
@@ -237,7 +237,7 @@ function SmallNorb.dataset(opt)
 	)
 
 	local pipeline = pipe.pipeline(unpack(stages))
-	local table = pipe.to_data_table(n_frames, pipeline)
+	local table = pipe.data_table_sink(n_frames, pipeline)
 
 	return dataset.TableDataset(table, SmallNorb)
 end
