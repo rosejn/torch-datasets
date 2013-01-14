@@ -237,6 +237,30 @@ function TableDataset:mini_batch(i, options)
 end
 
 
+-- Returns a random mini batch consisting of a table of tensors.
+--
+--   local batch = dataset:random_mini_batch()
+--
+--   -- or use directly
+--   net:forward(dataset:random_mini_batch().data)
+--
+--   -- set the batch size using an options table
+--   local batch = dataset:random_mini_batch({size = 100})
+--
+--   -- or get batch as a sequence of samples, rather than a full tensor
+--   for sample in dataset:random_mini_batch({sequence = true}) do
+--     net:forward(sample.data)
+--   end
+function TableDataset:random_mini_batch(options)
+
+   options = options or {}
+   local batch_size   = arg.optional(options, 'size', 10)
+   -- sequence option handled in TableDataset:mini_batch
+
+   return self:mini_batch(math.random(self:size() / batch_size), options)
+end
+
+
 -- Returns an infinite sequence of mini batches.
 --
 --   -- default options returns contiguous tensors of batch size 10
