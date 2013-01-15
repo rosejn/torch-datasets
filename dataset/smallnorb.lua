@@ -165,7 +165,7 @@ Parameters:
 
 * test (optional boolean, default : false)
 	use test set instead of training set
-* n_frames (optional unsigned) :
+* size (optional unsigned) :
 	number of frames to return
 * pairs (optional string : ('combined' | 'left' | 'right'):
 	How should stereo pairs be loaded? 'combined' returns the two sub-images in each example,
@@ -190,7 +190,7 @@ function SmallNorb.dataset(opt)
 	opt = opt or {}
 
 	local test              = arg.optional(opt, 'test', false)
-	local n_frames          = arg.optional(opt, 'n_frames', SmallNorb.size/2)
+	local size              = arg.optional(opt, 'size', SmallNorb.size/2)
 	local pair_format       = arg.optional(opt, 'pairs', 'combined')
 	local class             = arg.optional(opt, 'class')
 	local downsample_factor = arg.optional(opt, 'downsample')
@@ -238,7 +238,7 @@ function SmallNorb.dataset(opt)
 	)
 
 	local pipeline = pipe.pipeline(unpack(stages))
-	local table = pipe.data_table_sink(n_frames, pipeline)
+	local table = pipe.data_table_sink(size, pipeline)
 	
 	local d =  dataset.TableDataset(table, SmallNorb)
 
