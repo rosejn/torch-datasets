@@ -240,12 +240,13 @@ function SmallNorb.dataset(opt)
 	local pipeline = pipe.pipeline(unpack(stages))
 	local table = pipe.data_table_sink(n_frames, pipeline)
 	
+	local d =  dataset.TableDataset(table, SmallNorb)
 
-	if do_zca_whiten then
-		dataset.zca_whiten(table)
+	if zca_whiten then
+		d:zca_whiten()
 	end
 
-	return dataset.TableDataset(table, SmallNorb)
+	return d
 end
 
 
