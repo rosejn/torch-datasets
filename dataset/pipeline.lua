@@ -75,6 +75,11 @@ function pipe.pipeline(src, ...)
    return pipe.connect(src, pipe.line(funcs))
 end
 
+function pipe.filteredpipeline(src, filter, ...)
+   local funcs = {...}
+   return seq.filter(filter, pipe.connect(src, pipe.line(funcs)))
+end
+
 
 -- Animate input samples by sending them through an animation pipeline
 -- iteratively for n_frames.  (So each input sample will result in an
@@ -137,6 +142,7 @@ function pipe.file_source(dir, p, random)
 
   return seq.filter(function(s)
     if type(s.filename) ~= 'string' then return false end
+    if not paths.filep(s.filename) then return false end
     if p then
        return string.find(s.filename, p)
     end
@@ -149,8 +155,8 @@ end
 -- Returns a sequence of tables representing images in a directory, where
 -- each table has the path and filename properties.  (Use the image_loader stage
 -- to read the paths and load the images.)
-function pipe.image_dir_source(dir)
-   local files = pipe.file_source(dir)
+function pipe.image_dir_source(dir,random)
+   local files = pipe.file_source(dir,nil, random)
 
    return seq.filter(function(s)
       local suffix = string.match(s.filename, '%.(%a+)$')
@@ -346,6 +352,15 @@ function pipe.rgb2yuv(sample)
    return sample
 end
 
+function pipe.rgb2gray(sample)
+   if sample == nil then return nil end
+
+   if sample:dim() == 2 then return sample end
+   if sample:dim() == 3 and sample:dim() == 1 then return sample end
+
+   sample.data = image.rgb2y(sample.data)
+   return sample
+end
 
 -- Flip sample.data vertically
 function pipe.flip_vertical(sample)
@@ -431,6 +446,27 @@ function pipe.spatial_normalizer(channel, radius, threshold, thresval)
    end
 end
 
+function pipe.lcn(channel,kernel)
+   return function(sample)
+      if sample == nil then return nil end 
+      if not channel then
+         channel = torch.range(1,sample:size(1)):storage():totable()
+      end
+      if type(channel) == number then
+         channel = {channel}
+      end
+      local tdata
+      for i,c in pairs(channel) do
+         local t = image.lcn(sample.data[c],kernel)
+         if not tdata then
+            tdata = torch.Tensor():typeAs(sample):resize(#channel,sample.data:size(2),sample.data:size(3))
+         end
+         tdata[i]:copy(t)
+      end
+      sample.data:resizeAs(tdata):copy(tdata)
+      return sample
+   end
+end
 
 -- Convert from continuous to binary data.
 function pipe.binarize(sample)
