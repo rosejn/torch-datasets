@@ -13,16 +13,16 @@ dataset = {}
 -- Check locally and download dataset if not found.  Returns the path to the
 -- downloaded data file.
 function dataset.get_data(name, url)
-  local set_dir   = paths.concat(DATA_DIR, name)
+  local dset_dir   = paths.concat(DATA_DIR, name)
   local data_file = paths.basename(url)
-  local data_path = paths.concat(set_dir, data_file)
+  local data_path = paths.concat(dset_dir, data_file)
 
-  --print("checking for file located at: ", data_path)
+  print("checking for file located at: ", data_path)
 
   check_and_mkdir(TORCH_DIR)
   check_and_mkdir(DATA_DIR)
-  check_and_mkdir(set_dir)
-  check_and_download_file(data_path, url)
+  check_and_mkdir(dset_dir)
+  --check_and_download_file(data_path, url)
 
   return data_path
 end
@@ -37,6 +37,7 @@ function dataset.data_path(name, url, file)
     if not is_file(local_path) then
         do_with_cwd(data_dir,
           function()
+              print("decompressing file: ", data_path)
               decompress_file(data_path)
           end)
     end
