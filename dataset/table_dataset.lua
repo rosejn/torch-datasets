@@ -346,30 +346,51 @@ function TableDataset:pipeline_source()
 end
 
 
-
--- Globally normalise the dataset (subtract mean and divide by std)
---
--- The optional arguments specify specific channel (indices) that should be
--- normalized. If no channels are specified normalize across all channels.
-function TableDataset:normalize_globally(...)
+local function channels(...)
    channels = {...}
-
    if #channels == 0 then
       for i = 1,self.dataset.data:size(2) do
          table.insert(channels, i)
       end
    end
+   return channels
+end
 
-   for _,c in ipairs(channels) do
-      local mean = self.dataset.data[{ {}, c, {}, {} }]:mean()
-      local std = self.dataset.data[{ {}, c, {}, {} }]:std()
-      self.dataset.data[{ {}, c, {}, {} }]:add(-mean):div(std)
+
+-- Globally normalise the dataset (subtract mean and divide by std)
+--
+-- The optional arguments specify the indices of the channels that should be
+-- normalized. If no channels are specified normalize across all channels.
+function TableDataset:normalize_globally(...)
+
+   local function normalize(d)
+      local mean = d:mean()
+      local std = d:std()
+      d:add(-mean):div(std)
+   end
+
+   local channels = {...}
+   if #channels == 0 then
+      dataset.normalize(self.dataset.data)
+   else
+      for _,c in ipairs(channels) do
+         normalize(self.dataset.data[{ {}, c, {}, {} }])
+      end
    end
 end
 
 
-function TableDataset:zca_whiten()
-    -- TODO: deal with multiple channels
-    assert(self.dataset.data:size(2) == 1, 'ZCA whitening currently only support for 1-channel data')
-    dataset.zca_whiten(self.dataset)
+-- Apply ZCA whitening to dataset (one or more channels)
+--
+-- The optional arguments specify the indices of the channels that should be
+-- normalized. If no channels are specified all channels are jointly whitened.
+function TableDataset:zca_whiten(...)
+   local channels = {...}
+   if #channels == 0 then
+      dataset.zca_whiten(self.dataset.data)
+   else
+      for _,c in ipairs(channels) do
+         dataset.zca_whiten(self.dataset.data[{ {}, c, {}, {} }])
+      end
+   end
 end
