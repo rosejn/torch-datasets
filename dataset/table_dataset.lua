@@ -3,7 +3,9 @@ require 'fn/seq'
 require 'util/arg'
 require 'dataset'
 require 'dataset/pipeline'
+require 'dataset/whitening'
 require 'pprint'
+
 
 local arg = util.arg
 

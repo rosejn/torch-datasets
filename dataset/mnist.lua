@@ -80,14 +80,15 @@ end
 --   -- use the test data rather than the training data:
 --   m = dataset.Mnist({test = true})
 function Mnist.dataset(opts)
-   local scale, normalize, size, frames, rotation, translation, zoom
+   local scale, normalize, zca_whiten, size, frames, rotation, translation, zoom
    opts          = opts or {}
    test          = arg.optional(opts, 'test', false)
    scale         = arg.optional(opts, 'scale', {})
    normalize     = arg.optional(opts, 'normalize', false)
-   do_zca_whiten = arg.optional(opts, 'zca_whiten', false)
+   zca_whiten    = arg.optional(opts, 'zca_whiten', false)
    size          = arg.optional(opts, 'size', test and Mnist.test_size or Mnist.size)
    sort          = arg.optional(opts, 'sort', false)
+   transform     = arg.optional(opts, 'sort', nil)
 
    local transformations = {}
 
@@ -109,28 +110,20 @@ function Mnist.dataset(opts)
       samples, labels = dataset.sort_by_class(samples, labels)
    end
 
-   if normalize then
-      mean, std = dataset.global_normalization(samples)
-   end
-
-
    if (#scale == 2) then
       dataset.scale(samples, scale[1], scale[2])
    end
 
+   local d = dataset.TableDataset({data = samples, class = labels}, Mnist)
 
-   -- TODO: refactor the whole mnist dataset and get rid of this trick
-   if do_zca_whiten then
-      local table = {}
-      table.data = samples
-      dataset.zca_whiten(table)
-      samples = table.data
+   if normalize then
+      d:normalize_globally()
    end
 
-   local d = {
-      data = samples,
-      class = labels
-   }
+   if zca_whiten then
+      d:zca_whiten()
+   end
 
-   return dataset.TableDataset(d, Mnist)
+   return d
+
 end
