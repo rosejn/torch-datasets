@@ -482,13 +482,8 @@ function pipe.type(t, key)
    key = key or 'data'
 
    return function(sample)
-      if key then
-         sample[key] = sample[key][t](sample[key])
-      else
-         for k,_ in pairs(sample) do
-            sample[k] = sample[key][t](sample[key])
-         end
-      end
+      if sample == nil then return nil end
+      sample[key] = sample[key][t](sample[key])
       return sample
    end
 end
