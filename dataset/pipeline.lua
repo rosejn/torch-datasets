@@ -109,27 +109,40 @@ end
 -- Returns a sequence of {filename = <fname>, path = <path> } entries for a
 -- directory dir.  If a pattern p is also passed, then only files which match
 -- the pattern will be returned.
+-- random : if random is true then, files will be returned in random order
 -- (Note, it doesn't have to be a whole match, so even a suffix match will work.)
 -- e.g.
 --   pipe.matching_paths('./data', '.png')
 --      => { { filename = 'image_1.png', path = 'data/image_1.png' } ... }
-function pipe.file_source(dir, p)
+function pipe.file_source(dir, p, random)
+  if random == nil then random = false end
+  local fdir = fs.readdir(dir)
+  if random then
+     local rfiles = {}
+     local rind = torch.randperm(#fdir+1)-1 -- readdir returns a 0 based table
+     for i,f in ipairs(fdir) do
+        rfiles[rind[i+1]] = f
+     end
+     rfiles[rind[1]] = fdir[0]
+     rfiles.n = fdir.n
+     fdir = rfiles
+  end
   local files = seq.map(function(filename)
      return {
         filename = filename,
         path = paths.concat(dir, filename)
      }
   end,
-  seq.seq(fs.readdir(dir)))
+  seq.seq(fdir))
 
-  if p then
-     return seq.filter(function(s)
-        return string.find(s.filename, p)
-     end,
-     files)
-  else
-     return files
-  end
+  return seq.filter(function(s)
+    if type(s.filename) ~= 'string' then return false end
+    if p then
+       return string.find(s.filename, p)
+    end
+    return true
+  end,
+  files)
 end
 
 
