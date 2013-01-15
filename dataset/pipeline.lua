@@ -178,8 +178,8 @@ end
 
 -- Load a data table from a file on disk.
 function pipe.data_table_from_file(path)
-   local md, src = pipe.disk_object_source(path)
-   return pipe.data_table_sink(md.size, src)
+   local src, metadata = pipe.disk_object_source(path)
+   return pipe.data_table_sink(metadata.size, src)
 end
 
 
@@ -317,7 +317,7 @@ function pipe.image_loader(sample)
 
    local data = image.load(sample.path)
    local dims = data:size()
-   sample.width = dims[2]
+   sample.width  = dims[2]
    sample.height = dims[3]
    sample.data = data
    return sample
@@ -377,15 +377,15 @@ end
 
 
 -- Crop sample.data to a random patch of size width x height.
-function pipe.patch_sampler(width, height)
+function pipe.patch_sampler(patch_width, patch_height)
    return function(sample)
       if sample == nil then return nil end
 
-      local x = math.random(1, sample.width - width)
-      local y = math.random(1, sample.height - height)
-      sample.data   = image.crop(sample.data, x, y, x + width, y + height)
-      sample.width  = width
-      sample.height = height
+      local x = math.random(1, sample.width - patch_width)
+      local y = math.random(1, sample.height - patch_height)
+      sample.data   = image.crop(sample.data, x, y, x + patch_width, y + patch_height)
+      sample.width  = patch_width
+      sample.height = patch_height
       return sample
    end
 end

@@ -20,7 +20,7 @@ local TableDataset = torch.class("dataset.TableDataset")
 --   -- a 'dataset' of random samples with random class labels
 --   data_table = {
 --     data  = torch.Tensor(10, 20, 20),
---     class = torch.randperm(10)
+--     classes = torch.randperm(10)
 --   }
 --   metadata = { name = 'random', classes = {1,2,3,4,5,6,7,8,9,10} }
 --   dataset = TableDataset(data_table, metadata)
@@ -234,6 +234,30 @@ function TableDataset:mini_batch(i, options)
 
        return batch
    end
+end
+
+
+-- Returns a random mini batch consisting of a table of tensors.
+--
+--   local batch = dataset:random_mini_batch()
+--
+--   -- or use directly
+--   net:forward(dataset:random_mini_batch().data)
+--
+--   -- set the batch size using an options table
+--   local batch = dataset:random_mini_batch({size = 100})
+--
+--   -- or get batch as a sequence of samples, rather than a full tensor
+--   for sample in dataset:random_mini_batch({sequence = true}) do
+--     net:forward(sample.data)
+--   end
+function TableDataset:random_mini_batch(options)
+
+   options = options or {}
+   local batch_size   = arg.optional(options, 'size', 10)
+   -- sequence option handled in TableDataset:mini_batch
+
+   return self:mini_batch(math.random(self:size() / batch_size), options)
 end
 
 
