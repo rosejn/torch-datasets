@@ -165,6 +165,36 @@ function pipe.image_dir_source(dir,random)
    files)
 end
 
+-- Returns a sequence of tables representing images in a directory, where
+-- each table has the path and filename properties.  (Use the image_loader stage
+-- to read the paths and load the images.)
+function pipe.video_dir_source(dir,suffix,random)
+
+   local files = pipe.file_source(dir,nil, random)
+
+   local video_files = seq.filter(function(s)
+      local suff = string.match(s.filename, '%.(%a+)$')
+      return suffix == suff
+   end,
+   files)
+
+   require 'ffmpeg'
+
+   local frame_counter = 0
+   local current_video_file
+   local current_video
+
+   return function()
+      current_video_file = current_video_file or video_files()
+      if not current_video or frame_counter == current_video.nframes then
+         current_video = ffmpeg.Video(current_video_file.path)
+         frame_counter = 0
+      end
+      frame_counter = frame_counter + 1
+      local frame = current_video[1][frame_counter]
+      return {data = frame, frame = frame_counter, path=current_video_file.path, ffmpeg = current_video}
+   end
+end
 
 -- Read data from a file on disk, returns a metadata table and a pipeline source.
 function pipe.disk_object_source(path)
@@ -347,7 +377,6 @@ function pipe.image_loader(sample)
    sample.data = data
    return sample
 end
-
 
 -- Converts the RGB tensor sample.data to a YUV tensor, separating luminance
 -- information from color.
