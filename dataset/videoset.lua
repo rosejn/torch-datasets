@@ -18,6 +18,7 @@ function VideoSet.dataset(opts)
     local std_thres    = arg.optional(opts,'std_thres',0.2)
     local label_file   = arg.optional(opts,'label',nil)
     local suffix       = arg.optional(opts,'suffix','avi')
+    local randomize    = arg.optional(opts,'randomize',false)
 
     if not dir or not paths.dirp(dir) then
         error('directory does not exist : ' .. dir)
@@ -57,11 +58,11 @@ function VideoSet.dataset(opts)
                 return false
             end
         end
-        return pipe.filteredpipeline(pipe.video_dir_source(dir,suffix,true),
+        return pipe.filteredpipeline(pipe.video_dir_source(dir,suffix,randomize),
                                     thres,
                                     unpack(p))
     else
-        return pipe.pipeline(pipe.video_dir_source(dir,true),
+        return pipe.pipeline(pipe.video_dir_source(dir,randomize),
                              unpack(p))
     end
 end

@@ -17,6 +17,7 @@ function ImageSet.dataset(opts)
     local lcn_chn      = arg.optional(opts,'lcn_channel',0)
     local std_thres    = arg.optional(opts,'std_thres',0.2)
     local label_file   = arg.optional(opts,'label',nil)
+    local randomize    = arg.optional(opts,'randomize',true)
 
     if not dir or not paths.dirp(dir) then
         error('directory does not exist : ' .. dir)
@@ -57,11 +58,11 @@ function ImageSet.dataset(opts)
                 return false
             end
         end
-        return pipe.filteredpipeline(pipe.image_dir_source(dir,true),
+        return pipe.filteredpipeline(pipe.image_dir_source(dir,randomize),
                                     thres,
                                     unpack(p))
     else
-        return pipe.pipeline(pipe.image_dir_source(dir,true),
+        return pipe.pipeline(pipe.image_dir_source(dir,randomize),
                              unpack(p))
     end
 end
