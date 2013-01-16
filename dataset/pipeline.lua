@@ -115,22 +115,23 @@ end
 -- directory dir.  If a pattern p is also passed, then only files which match
 -- the pattern will be returned.
 -- random : if random is true then, files will be returned in random order
+-- loop   : if true, then the file source will keep looping over files
 -- (Note, it doesn't have to be a whole match, so even a suffix match will work.)
 -- e.g.
 --   pipe.matching_paths('./data', '.png')
 --      => { { filename = 'image_1.png', path = 'data/image_1.png' } ... }
-function pipe.file_source(dir, p, random)
+function pipe.file_source(dir, p, random, loop)
   if random == nil then random = false end
   local fdir = fs.readdir(dir)
-  if random then
-     local rfiles = {}
-     local rind = torch.randperm(#fdir+1)-1 -- readdir returns a 0 based table
-     for i,f in ipairs(fdir) do
-        rfiles[rind[i+1]] = f
-     end
-     rfiles[rind[1]] = fdir[0]
-     rfiles.n = fdir.n
-     fdir = rfiles
+  local myseq
+  if loop and random then
+     myseq = seq.mapcat(seq.shuffle, seq.repeat_val(fdir))
+  elseif loop then
+     myseq = seq.cycle(fdir)
+  elseif random then
+     myseq = seq.shuffle(fdir)
+  else 
+     myseq = seq.seq(fdir)
   end
   local files = seq.map(function(filename)
      return {
@@ -138,7 +139,7 @@ function pipe.file_source(dir, p, random)
         path = paths.concat(dir, filename)
      }
   end,
-  seq.seq(fdir))
+  myseq)
 
   return seq.filter(function(s)
     if type(s.filename) ~= 'string' then return false end
@@ -155,8 +156,8 @@ end
 -- Returns a sequence of tables representing images in a directory, where
 -- each table has the path and filename properties.  (Use the image_loader stage
 -- to read the paths and load the images.)
-function pipe.image_dir_source(dir,random)
-   local files = pipe.file_source(dir,nil, random)
+function pipe.image_dir_source(dir,random,loop)
+   local files = pipe.file_source(dir,nil, random,loop)
 
    return seq.filter(function(s)
       local suffix = string.match(s.filename, '%.(%a+)$')
@@ -168,9 +169,9 @@ end
 -- Returns a sequence of tables representing videos in a directory, where
 -- each table has the path and filename properties. 
 -- This function also loads videos and returns frames from them.
-function pipe.video_dir_source(dir,suffix,random)
+function pipe.video_dir_source(dir,suffix,random,loop)
 
-   local files = pipe.file_source(dir,nil, random)
+   local files = pipe.file_source(dir,nil, random,loop)
 
    local video_files = seq.filter(function(s)
       local suff = string.match(s.filename, '%.(%a+)$')
