@@ -165,9 +165,9 @@ function pipe.image_dir_source(dir,random)
    files)
 end
 
--- Returns a sequence of tables representing images in a directory, where
--- each table has the path and filename properties.  (Use the image_loader stage
--- to read the paths and load the images.)
+-- Returns a sequence of tables representing videos in a directory, where
+-- each table has the path and filename properties. 
+-- This function also loads videos and returns frames from them.
 function pipe.video_dir_source(dir,suffix,random)
 
    local files = pipe.file_source(dir,nil, random)
@@ -276,13 +276,6 @@ function pipe.filter(source, field, value)
    )
 end
 
-function pipe.filterfunc(filter)
-   return function (sample)
-      if sample == nil then return nil end
-      return filter(sample)
-   end
-end
-
 --------------------------------------------------------------------------
 -- Pipeline Sinks
 --------------------------------------------------------------------------
@@ -387,6 +380,7 @@ function pipe.rgb2yuv(sample)
    return sample
 end
 
+-- Converts RGB tensor sample.data to grayscale tensor
 function pipe.rgb2gray(sample)
    if sample == nil then return nil end
 
@@ -481,6 +475,9 @@ function pipe.spatial_normalizer(channel, radius, threshold, thresval)
    end
 end
 
+-- Applies local contrast normalization pre-processing
+-- if channel is not given, then all channels of an input are used
+-- if kernel is not given a 9x9 gaussian kernel is used.
 function pipe.lcn(channel,kernel)
    return function(sample)
       if sample == nil then return nil end 
@@ -512,6 +509,8 @@ function pipe.binarize(sample)
    return sample
 end
 
+-- runs garbage collector every 'nupdates' number of updates
+-- this ensures that we clear out temporary tensors regularly
 function pipe.gc(nupdates)
    nupdates = nupdates or 1000
    local cntr = 0
