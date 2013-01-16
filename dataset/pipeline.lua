@@ -75,6 +75,11 @@ function pipe.pipeline(src, ...)
    return pipe.connect(src, pipe.line(funcs))
 end
 
+function pipe.filteredpipeline(src, filter, ...)
+   local funcs = {...}
+   return seq.filter(filter, pipe.connect(src, pipe.line(funcs)))
+end
+
 
 -- Animate input samples by sending them through an animation pipeline
 -- iteratively for n_frames.  (So each input sample will result in an
@@ -109,35 +114,49 @@ end
 -- Returns a sequence of {filename = <fname>, path = <path> } entries for a
 -- directory dir.  If a pattern p is also passed, then only files which match
 -- the pattern will be returned.
+-- random : if random is true then, files will be returned in random order
 -- (Note, it doesn't have to be a whole match, so even a suffix match will work.)
 -- e.g.
 --   pipe.matching_paths('./data', '.png')
 --      => { { filename = 'image_1.png', path = 'data/image_1.png' } ... }
-function pipe.file_source(dir, p)
+function pipe.file_source(dir, p, random)
+  if random == nil then random = false end
+  local fdir = fs.readdir(dir)
+  if random then
+     local rfiles = {}
+     local rind = torch.randperm(#fdir+1)-1 -- readdir returns a 0 based table
+     for i,f in ipairs(fdir) do
+        rfiles[rind[i+1]] = f
+     end
+     rfiles[rind[1]] = fdir[0]
+     rfiles.n = fdir.n
+     fdir = rfiles
+  end
   local files = seq.map(function(filename)
      return {
         filename = filename,
         path = paths.concat(dir, filename)
      }
   end,
-  seq.seq(fs.readdir(dir)))
+  seq.seq(fdir))
 
-  if p then
-     return seq.filter(function(s)
-        return string.find(s.filename, p)
-     end,
-     files)
-  else
-     return files
-  end
+  return seq.filter(function(s)
+    if type(s.filename) ~= 'string' then return false end
+    if not paths.filep(s.path) then return false end
+    if p then
+       return string.find(s.filename, p)
+    end
+    return true
+  end,
+  files)
 end
 
 
 -- Returns a sequence of tables representing images in a directory, where
 -- each table has the path and filename properties.  (Use the image_loader stage
 -- to read the paths and load the images.)
-function pipe.image_dir_source(dir)
-   local files = pipe.file_source(dir)
+function pipe.image_dir_source(dir,random)
+   local files = pipe.file_source(dir,nil, random)
 
    return seq.filter(function(s)
       local suffix = string.match(s.filename, '%.(%a+)$')
@@ -146,6 +165,36 @@ function pipe.image_dir_source(dir)
    files)
 end
 
+-- Returns a sequence of tables representing images in a directory, where
+-- each table has the path and filename properties.  (Use the image_loader stage
+-- to read the paths and load the images.)
+function pipe.video_dir_source(dir,suffix,random)
+
+   local files = pipe.file_source(dir,nil, random)
+
+   local video_files = seq.filter(function(s)
+      local suff = string.match(s.filename, '%.(%a+)$')
+      return suffix == suff
+   end,
+   files)
+
+   require 'ffmpeg'
+
+   local frame_counter = 0
+   local current_video_file
+   local current_video
+
+   return function()
+      current_video_file = current_video_file or video_files()
+      if not current_video or frame_counter == current_video.nframes then
+         current_video = ffmpeg.Video(current_video_file.path)
+         frame_counter = 0
+      end
+      frame_counter = frame_counter + 1
+      local frame = current_video[1][frame_counter]
+      return {data = frame, frame = frame_counter, path=current_video_file.path, ffmpeg = current_video}
+   end
+end
 
 -- Read data from a file on disk, returns a metadata table and a pipeline source.
 function pipe.disk_object_source(path)
@@ -227,6 +276,12 @@ function pipe.filter(source, field, value)
    )
 end
 
+function pipe.filterfunc(filter)
+   return function (sample)
+      if sample == nil then return nil end
+      return filter(sample)
+   end
+end
 
 --------------------------------------------------------------------------
 -- Pipeline Sinks
@@ -323,7 +378,6 @@ function pipe.image_loader(sample)
    return sample
 end
 
-
 -- Converts the RGB tensor sample.data to a YUV tensor, separating luminance
 -- information from color.
 function pipe.rgb2yuv(sample)
@@ -333,6 +387,15 @@ function pipe.rgb2yuv(sample)
    return sample
 end
 
+function pipe.rgb2gray(sample)
+   if sample == nil then return nil end
+
+   if sample.data:dim() == 2 then return sample end
+   if sample.data:dim() == 3 and sample.data:dim() == 1 then return sample end
+
+   sample.data = image.rgb2y(sample.data)
+   return sample
+end
 
 -- Flip sample.data vertically
 function pipe.flip_vertical(sample)
@@ -418,6 +481,30 @@ function pipe.spatial_normalizer(channel, radius, threshold, thresval)
    end
 end
 
+function pipe.lcn(channel,kernel)
+   return function(sample)
+      if sample == nil then return nil end 
+      if not channel then
+         channel = torch.range(1,sample.data:size(1)):storage():totable()
+      end
+      if type(channel) == number then
+         channel = {channel}
+      end
+      if channel[#channel] > sample.data:size(1) then
+         channel = torch.range(1,sample.data:size(1)):storage():totable()
+      end
+      local tdata
+      for i,c in pairs(channel) do
+         local t = image.lcn(sample.data[c],kernel)
+         if not tdata then
+            tdata = sample.data.new():resize(#channel,t:size(1),t:size(2))
+         end
+         tdata[i]:copy(t)
+      end
+      sample.data = tdata
+      return sample
+   end
+end
 
 -- Convert from continuous to binary data.
 function pipe.binarize(sample)
@@ -425,6 +512,18 @@ function pipe.binarize(sample)
    return sample
 end
 
+function pipe.gc(nupdates)
+   nupdates = nupdates or 1000
+   local cntr = 0
+   return function (sample)
+      if sample == nil then return nil end
+      cntr = cntr + 1
+      if math.mod(cntr,nupdates) == 0 then
+         collectgarbage()
+      end
+      return sample
+   end
+end
 
 -- Pad sample.data on all sides with value v (default = 0).
 function pipe.pad_values(width, v)
@@ -482,13 +581,8 @@ function pipe.type(t, key)
    key = key or 'data'
 
    return function(sample)
-      if key then
-         sample[key] = sample[key][t](sample[key])
-      else
-         for k,_ in pairs(sample) do
-            sample[k] = sample[key][t](sample[key])
-         end
-      end
+      if sample == nil then return nil end
+      sample[key] = sample[key][t](sample[key])
       return sample
    end
 end
