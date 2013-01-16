@@ -142,7 +142,7 @@ function pipe.file_source(dir, p, random)
 
   return seq.filter(function(s)
     if type(s.filename) ~= 'string' then return false end
-    if not paths.filep(s.filename) then return false end
+    if not paths.filep(s.path) then return false end
     if p then
        return string.find(s.filename, p)
     end
@@ -246,6 +246,12 @@ function pipe.filter(source, field, value)
    )
 end
 
+function pipe.filterfunc(filter)
+   return function (sample)
+      if sample == nil then return nil end
+      return filter(sample)
+   end
+end
 
 --------------------------------------------------------------------------
 -- Pipeline Sinks
@@ -355,8 +361,8 @@ end
 function pipe.rgb2gray(sample)
    if sample == nil then return nil end
 
-   if sample:dim() == 2 then return sample end
-   if sample:dim() == 3 and sample:dim() == 1 then return sample end
+   if sample.data:dim() == 2 then return sample end
+   if sample.data:dim() == 3 and sample.data:dim() == 1 then return sample end
 
    sample.data = image.rgb2y(sample.data)
    return sample
@@ -450,20 +456,23 @@ function pipe.lcn(channel,kernel)
    return function(sample)
       if sample == nil then return nil end 
       if not channel then
-         channel = torch.range(1,sample:size(1)):storage():totable()
+         channel = torch.range(1,sample.data:size(1)):storage():totable()
       end
       if type(channel) == number then
          channel = {channel}
+      end
+      if channel[#channel] > sample.data:size(1) then
+         channel = torch.range(1,sample.data:size(1)):storage():totable()
       end
       local tdata
       for i,c in pairs(channel) do
          local t = image.lcn(sample.data[c],kernel)
          if not tdata then
-            tdata = torch.Tensor():typeAs(sample):resize(#channel,sample.data:size(2),sample.data:size(3))
+            tdata = sample.data.new():resize(#channel,t:size(1),t:size(2))
          end
          tdata[i]:copy(t)
       end
-      sample.data:resizeAs(tdata):copy(tdata)
+      sample.data = tdata
       return sample
    end
 end
@@ -474,6 +483,18 @@ function pipe.binarize(sample)
    return sample
 end
 
+function pipe.gc(nupdates)
+   nupdates = nupdates or 1000
+   local cntr = 0
+   return function (sample)
+      if sample == nil then return nil end
+      cntr = cntr + 1
+      if math.mod(cntr,nupdates) == 0 then
+         collectgarbage()
+      end
+      return sample
+   end
+end
 
 -- Pad sample.data on all sides with value v (default = 0).
 function pipe.pad_values(width, v)
