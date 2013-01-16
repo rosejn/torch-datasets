@@ -15,7 +15,7 @@ function VideoSet.dataset(opts)
     local do_yuv       = arg.optional(opts,'yuv',true)
     local do_gray      = arg.optional(opts,'gray',not do_yuv)
     local lcn_chn      = arg.optional(opts,'lcn_channel',0)
-    local std_thres    = arg.optional(opts,'std_thres',0.2)
+    local std_thres    = arg.optional(opts,'std_thres',0.0)
     local label_file   = arg.optional(opts,'label',nil)
     local suffix       = arg.optional(opts,'suffix','avi')
     local randomize    = arg.optional(opts,'randomize',false)
@@ -62,7 +62,7 @@ function VideoSet.dataset(opts)
                                     thres,
                                     unpack(p))
     else
-        return pipe.pipeline(pipe.video_dir_source(dir,randomize),
+        return pipe.pipeline(pipe.video_dir_source(dir,suffix,randomize),
                              unpack(p))
     end
 end

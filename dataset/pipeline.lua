@@ -187,9 +187,11 @@ function pipe.video_dir_source(dir,suffix,random)
    return function()
       current_video_file = current_video_file or video_files()
       if not current_video or frame_counter == current_video.nframes then
+         current_video_file = video_files()
          current_video = ffmpeg.Video(current_video_file.path)
          frame_counter = 0
       end
+      -- print(frame_counter)
       frame_counter = frame_counter + 1
       local frame = current_video[1][frame_counter]
       return {data = frame, frame = frame_counter, path=current_video_file.path, ffmpeg = current_video}
