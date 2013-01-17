@@ -368,8 +368,8 @@ function pipe.image_loader(sample)
 
    local data = image.load(sample.path)
    local dims = data:size()
-   sample.width  = dims[2]
-   sample.height = dims[3]
+   sample.width  = dims[3]
+   sample.height = dims[2]
    sample.data = data
    return sample
 end
