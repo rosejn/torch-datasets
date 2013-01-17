@@ -67,3 +67,18 @@ Standard pipeline options can be used to add post-processing stages (e.g. binari
 Pass a custom pipeline for processing samples:
 
      s = dataset:sampler({pipeline = my_pipeline})
+
+
+Create a dataset from bunch of images in a directory
+
+     require 'datset/imageset'
+     d = ImageSet.dataset({dir='your-data-directory'})
+     while true do w=image.display({image=d().data,win=w}) util.sleep(1/10) end
+
+Create a dataset from bunch of videos in a directory
+
+     require 'datset/videoset'
+     d = VideoSet.dataset({dir='KTH'})
+     while true do w=image.display({image=d().data,win=w}) util.sleep(1/10) end
+
+
