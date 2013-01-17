@@ -35,7 +35,7 @@ pipe = {}
 --
 --   local processor =
 --    pipe.line({pipe.image_loader,
---              pipe.scaler(width, height),
+--              pipe.resizer(width, height),
 --              pipe.rgb2yuv,
 --              pipe.normalizer,
 --              pipe.spatial_normalizer(1, 7, 1, 1),
@@ -64,7 +64,7 @@ end
 --
 --    pipe.pipeline(pipe.file_data_source(path),
 --                  pipe.image_loader,
---                  pipe.scaler(width, height),
+--                  pipe.resizer(width, height),
 --                  pipe.rgb2yuv,
 --                  pipe.normalizer,
 --                  pipe.spatial_normalizer(1, 7, 1, 1),
