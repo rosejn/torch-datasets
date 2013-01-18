@@ -3,7 +3,9 @@ require 'fn/seq'
 require 'util/arg'
 require 'dataset'
 require 'dataset/pipeline'
+require 'dataset/whitening'
 require 'pprint'
+
 
 local arg = util.arg
 
@@ -341,4 +343,54 @@ end
 -- Return a pipeline source (i.e. a sequence of samples).
 function TableDataset:pipeline_source()
    return self:sampler({shuffled = false})
+end
+
+
+local function channels(...)
+   channels = {...}
+   if #channels == 0 then
+      for i = 1,self.dataset.data:size(2) do
+         table.insert(channels, i)
+      end
+   end
+   return channels
+end
+
+
+-- Globally normalise the dataset (subtract mean and divide by std)
+--
+-- The optional arguments specify the indices of the channels that should be
+-- normalized. If no channels are specified normalize across all channels.
+function TableDataset:normalize_globally(...)
+
+   local function normalize(d)
+      local mean = d:mean()
+      local std = d:std()
+      d:add(-mean):div(std)
+   end
+
+   local channels = {...}
+   if #channels == 0 then
+      dataset.normalize(self.dataset.data)
+   else
+      for _,c in ipairs(channels) do
+         normalize(self.dataset.data[{ {}, c, {}, {} }])
+      end
+   end
+end
+
+
+-- Apply ZCA whitening to dataset (one or more channels)
+--
+-- The optional arguments specify the indices of the channels that should be
+-- normalized. If no channels are specified all channels are jointly whitened.
+function TableDataset:zca_whiten(...)
+   local channels = {...}
+   if #channels == 0 then
+      dataset.zca_whiten(self.dataset.data)
+   else
+      for _,c in ipairs(channels) do
+         dataset.zca_whiten(self.dataset.data[{ {}, c, {}, {} }])
+      end
+   end
 end
