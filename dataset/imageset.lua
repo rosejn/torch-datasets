@@ -80,7 +80,7 @@ function ImageSet.dataset(opts)
     local lcn_chn      = arg.optional(opts,'lcn_channel',nil)
     local patch_width  = arg.optional(opts,'width',0)
     local patch_height = arg.optional(opts,'height',patch_width)
-    local std_thres    = arg.optional(opts,'std_thres',0.2)
+    local std_thres    = arg.optional(opts,'std_thres',0)
 
     local data = {}
     local path = {}
@@ -107,9 +107,6 @@ function ImageSet.dataset(opts)
     if label_file and not paths.filep(label_file) then
         error('label file not found : ' .. label_file)
     end
-
-    local filter = function(sample) return sample end
-    if std_thres > 0 then filter = thres end
 
     -- load images into memory
     local datapipe = pipe.pipeline(pipe.image_dir_source(dir), unpack(p))
@@ -138,6 +135,14 @@ function ImageSet.dataset(opts)
     local data_table = {data = data, path=path, classes = class}
     local meta_data = {name = name}
 
+    local dataset = dataset.SimpleDataset(data_table,meta_data)
+
+    local postpipe = nil
+    if patch_width > 0 and patch_height > 0 then
+        postpipe = pipe.line({pipe.patch_sampler(patch_width,patch_height)})
+    end
+    sampler = dataset:sampler({shuffled = true, pipeline = postpipe})
+
     local thres = function(sample)
         if std_thres == 0 or torch.std(sample.data) > std_thres then
             return true
@@ -145,9 +150,7 @@ function ImageSet.dataset(opts)
             return false
         end
     end
-    local dataset = dataset.SimpleDataset(data_table,meta_data)
-    local sampler = seq.filter(thres,dataset:sampler({shuffled = true,
-                                                      pipeline = pipe.line({pipe.patch_sampler(patch_width,patch_height)})}))
+    local fsampler = seq.filter(thres,sampler)
 
     return dataset, sampler
 end
