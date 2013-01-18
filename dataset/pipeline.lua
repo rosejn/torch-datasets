@@ -152,7 +152,6 @@ function pipe.file_source(dir, p, random, loop)
   files)
 end
 
-
 -- Returns a sequence of tables representing images in a directory, where
 -- each table has the path and filename properties.  (Use the image_loader stage
 -- to read the paths and load the images.)
@@ -165,6 +164,54 @@ function pipe.image_dir_source(dir,random,loop)
    end,
    files)
 end
+
+
+-- Returns a cached source and loader combination.
+-- This is useful to read bunch of source objects from disk using the 
+-- loader and caching them. When all the samples in the cache are consumed, 
+-- it refills the cache.
+function pipe.cached_loader_source(source,loader,cachesize)
+
+  local cache = {}
+
+  local resetcache = function()
+      cache = {}
+      while #cache < cachesize do
+      table.insert(cache,loader(source()))
+    end
+  end
+
+  return function(sample)
+    if sample == nil then return nil end
+
+    if #cache == 0 then
+      resetcache()
+    end
+    return table.remove(cache)
+  end
+end
+
+
+-- Returns a loader/source combination that caches the 
+-- output of  loader(source()) and returns infinitely many 
+-- samples from the cache in order
+function pipe.batch_loader_source(source,loader)
+  local cache = {}
+
+  while true do
+    local s = source()
+    if not s then break end
+    table.insert(cache,loader(s))
+  end
+
+  local cntr = 0
+  return function()
+    local sample = cache[(cntr % #cache) + 1]
+    cntr = cntr + 1
+    return sample
+  end
+end
+
 
 -- Returns a sequence of tables representing videos in a directory, where
 -- each table has the path and filename properties. 
@@ -368,11 +415,12 @@ function pipe.image_loader(sample)
 
    local data = image.load(sample.path)
    local dims = data:size()
-   sample.width  = dims[2]
-   sample.height = dims[3]
+   sample.width  = dims[#dims]
+   sample.height = dims[#dims-1]
    sample.data = data
    return sample
 end
+
 
 -- Converts the RGB tensor sample.data to a YUV tensor, separating luminance
 -- information from color.
@@ -440,9 +488,13 @@ end
 function pipe.patch_sampler(patch_width, patch_height)
    return function(sample)
       if sample == nil then return nil end
-
-      local x = math.random(1, sample.width - patch_width)
-      local y = math.random(1, sample.height - patch_height)
+      local sample_width = sample.data:size(3)
+      local sample_height = sample.data:size(2)
+      if sample_width < patch_width or sample_height < patch_height then
+        error('sample smaller than crop size',sample,patch_width,patch_height)
+      end
+      local x = math.random(1, sample_width - patch_width)
+      local y = math.random(1, sample_height - patch_height)
       sample.data   = image.crop(sample.data, x, y, x + patch_width, y + patch_height)
       sample.width  = patch_width
       sample.height = patch_height
@@ -502,6 +554,8 @@ function pipe.lcn(channel,kernel)
          tdata[i]:copy(t)
       end
       sample.data = tdata
+      sample.width = tdata:size(3)
+      sample.height = tdata:size(2)
       return sample
    end
 end
@@ -515,7 +569,7 @@ end
 -- runs garbage collector every 'nupdates' number of updates
 -- this ensures that we clear out temporary tensors regularly
 function pipe.gc(nupdates)
-   nupdates = nupdates or 1000
+   nupdates = nupdates or 10
    local cntr = 0
    return function (sample)
       if sample == nil then return nil end
