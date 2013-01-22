@@ -421,6 +421,14 @@ function pipe.image_loader(sample)
    return sample
 end
 
+-- Loads the video sample.path using ffmpeg interface
+function pipe.video_loader(sample)
+   if not ffmpeg then require 'ffmpeg' end
+   local data = ffmpeg.Video(sample.path)
+   sample.data = data
+   return sample
+end
+
 
 -- Converts the RGB tensor sample.data to a YUV tensor, separating luminance
 -- information from color.
