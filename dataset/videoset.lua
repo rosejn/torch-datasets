@@ -149,7 +149,6 @@ function VideoSet.dataset(opts)
 
         if file_counter == 0 or nframes > 0 and frame_counter == nframes or nframes == 0 and frame_counter >= sample.ffmpeg.nframes then
             file_counter = math.floor(torch.uniform(1,self:size()))
-            frame_counter = 0
             for key, v in pairs(self.dataset) do
                 sample[key] = v[file_counter]
             end
@@ -157,6 +156,10 @@ function VideoSet.dataset(opts)
             if patch_width > 0 and patch_height > 0 then
                 patch_x1 = patch_x2
                 patch_y1 = patch_y2
+            end
+            frame_counter = 0
+            if nframes > 0 and nframes < sample.ffmpeg.nframes then
+                sample.ffmpeg.current = math.random(0,sample.ffmpeg.nframes-nframes-1)
             end
         end
         frame_counter = frame_counter + 1
