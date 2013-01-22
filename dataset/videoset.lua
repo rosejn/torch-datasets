@@ -154,6 +154,10 @@ function VideoSet.dataset(opts)
                 sample[key] = v[file_counter]
             end
             sample.ffmpeg = ffmpeg.Video{path=sample.path, fps=fps, length=video_length, width=size_width, height=size_height}
+            if patch_width > 0 and patch_height > 0 then
+                patch_x1 = patch_x2
+                patch_y1 = patch_y2
+            end
         end
         frame_counter = frame_counter + 1
         sample.frame = frame_counter
@@ -174,11 +178,22 @@ function VideoSet.dataset(opts)
     end
 
     if patch_x1 > 0 and patch_y1 > 0 and patch_x2 > patch_x1 and patch_y2 > patch_y1 then
-        table.insert(p,pipe.cropper(x1, y1, x2, y2))
-    end
-
-    if patch_width > 0 and patch_height > 0 then
-        table.insert(p,pipe.patch_sampler(patch_width, patch_height))
+        table.insert(p,pipe.cropper(patch_x1, patch_y1, patch_x2, patch_y2))
+    elseif patch_width > 0 and patch_height > 0 then
+        local cropper = function(sample)
+            if sample == nil then return nil end
+            local width = sample.data:size(3)
+            local height = sample.data:size(2)
+            if patch_x1 == patch_x2 and patch_y1 == patch_y2 then
+                patch_x1 = math.random(1,width-patch_width)
+                patch_y1 = math.random(1,height-patch_height)
+                patch_x2 = patch_x1 + patch_width -1
+                patch_y2 = patch_y1 + patch_height -1
+            end
+            sample.data  = image.crop(sample.data, patch_x1, patch_y1, patch_x2, patch_y2)
+            return sample
+        end
+        table.insert(p,cropper)
     end
 
     local postpipe = nil
