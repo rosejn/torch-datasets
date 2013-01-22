@@ -25,3 +25,28 @@
    video extractor
  - do both random and in order iteration in a directory (or with a given sort
    fn)
+
+* Should each function of pipeline accept a function that returns the sample as parameter rather than the sample itself?
+
+  - we could create much mmore flexible structures
+
+```lua
+  function my_pipe_function(sampler)
+    local sample = sampler()
+    if sample == nil then return nil end
+
+    local function sample_is_awesome(sample)
+      if sample.is_blessed then
+        return true
+      else
+        return false
+      end
+    end
+
+    while not sample_is_awesome(sample) do
+       sample = sampler()
+    end
+
+    return sample
+  end
+```
