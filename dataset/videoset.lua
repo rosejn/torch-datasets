@@ -152,7 +152,10 @@ function VideoSet.dataset(opts)
             for key, v in pairs(self.dataset) do
                 sample[key] = v[file_counter]
             end
+            local oprint = print
+            print = function () end
             sample.ffmpeg = ffmpeg.Video{path=sample.path, fps=fps, length=video_length, width=size_width, height=size_height}
+            print = oprint
             if patch_width > 0 and patch_height > 0 then
                 patch_x1 = patch_x2
                 patch_y1 = patch_y2
@@ -161,7 +164,13 @@ function VideoSet.dataset(opts)
             if nframes > 0 and nframes < sample.ffmpeg.nframes then
                 sample.ffmpeg.current = math.random(0,sample.ffmpeg.nframes-nframes-1)
             end
+        elseif nframes > 0 and frame_counter == sample.ffmpeg.nframes then
+            if patch_width > 0 and patch_height > 0 then
+                patch_x1 = patch_x2
+                patch_y1 = patch_y2
+            end
         end
+
         frame_counter = frame_counter + 1
         sample.frame = frame_counter
         sample.data = sample.ffmpeg:forward()
