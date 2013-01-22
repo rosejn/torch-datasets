@@ -21,7 +21,7 @@ function dataset.get_data(name, url)
   check_and_mkdir(TORCH_DIR)
   check_and_mkdir(DATA_DIR)
   check_and_mkdir(dset_dir)
-  --check_and_download_file(data_path, url)
+  check_and_download_file(data_path, url)
 
   return data_path
 end
