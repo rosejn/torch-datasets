@@ -443,17 +443,29 @@ end
 function pipe.rgb2gray(sample)
    if sample == nil then return nil end
 
-   if sample.data:dim() == 2 then return sample end
-   if sample.data:dim() == 3 and sample.data:dim() == 1 then return sample end
+   if sample.data:dim() ~= 3 then return sample end
+   if sample:size(1) ~= 3 then return sample end
 
    sample.data = image.rgb2y(sample.data)
    return sample
 end
 
 -- Select sample.data[channel], for example to get only Y of YUV channel = 0.
-function pipe.select_channel(channel)
+function pipe.select_channel(channels)
+
+    if channels == 'r' or channels == 'R' then
+        channels = 1
+    elseif channels == 'g' or channels == 'G' then
+        channels = 2
+    elseif channels == 'b' or channels == 'B' then
+        channels = 3
+    end
+    if type(channels) == 'number' then
+        channels = {channels, channels}
+    end
+
     return function(sample)
-        sample.data = sample.data[channel]
+        sample.data = sample.data[{ channels,{},{} }]
         return sample
     end
 end
