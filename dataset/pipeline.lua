@@ -444,7 +444,7 @@ function pipe.rgb2gray(sample)
    if sample == nil then return nil end
 
    if sample.data:dim() ~= 3 then return sample end
-   if sample:size(1) ~= 3 then return sample end
+   if sample.data:size(1) ~= 3 then return sample end
 
    sample.data = image.rgb2y(sample.data)
    return sample
