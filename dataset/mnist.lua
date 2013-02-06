@@ -80,15 +80,14 @@ end
 --   -- use the test data rather than the training data:
 --   m = dataset.Mnist({test = true})
 function Mnist.dataset(opts)
-   local scale, normalize, zca_whiten, size, frames, rotation, translation, zoom
-   opts          = opts or {}
-   test          = arg.optional(opts, 'test', false)
-   scale         = arg.optional(opts, 'scale', {})
-   normalize     = arg.optional(opts, 'normalize', false)
-   zca_whiten    = arg.optional(opts, 'zca_whiten', false)
-   size          = arg.optional(opts, 'size', test and Mnist.test_size or Mnist.size)
-   sort          = arg.optional(opts, 'sort', false)
-   transform     = arg.optional(opts, 'sort', nil)
+   opts             = opts or {}
+   local test       = arg.optional(opts, 'test', false)
+   local scale      = arg.optional(opts, 'scale', {})
+   local normalize  = arg.optional(opts, 'normalize', false)
+   local zca_whiten = arg.optional(opts, 'zca_whiten', false)
+   local size       = arg.optional(opts, 'size', test and Mnist.test_size or Mnist.size)
+   local sort       = arg.optional(opts, 'sort', false)
+   local transform  = arg.optional(opts, 'sort', nil)
 
    local transformations = {}
 
