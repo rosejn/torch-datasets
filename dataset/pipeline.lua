@@ -331,6 +331,15 @@ function pipe.rgb2yuv(sample)
 end
 
 
+-- Select sample.data[channel], for example to get only Y of YUV channel = 0.
+function pipe.select_channel(channel)
+    return function(sample)
+        sample.data = sample.data[channel]
+        return sample
+    end
+end
+
+
 -- Flip sample.data vertically
 function pipe.flip_vertical(sample)
    if sample == nil then return nil end
