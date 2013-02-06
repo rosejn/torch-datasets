@@ -9,19 +9,18 @@ local TORCH_DIR = paths.concat(os.getenv('HOME'), '.torch')
 local DATA_DIR  = paths.concat(TORCH_DIR, 'data')
 
 dataset = {}
-
 -- Check locally and download dataset if not found.  Returns the path to the
 -- downloaded data file.
 function dataset.get_data(name, url)
-  local set_dir   = paths.concat(DATA_DIR, name)
+  local dset_dir   = paths.concat(DATA_DIR, name)
   local data_file = paths.basename(url)
-  local data_path = paths.concat(set_dir, data_file)
+  local data_path = paths.concat(dset_dir, data_file)
 
-  --print("checking for file located at: ", data_path)
+  print("checking for file located at: ", data_path)
 
   check_and_mkdir(TORCH_DIR)
   check_and_mkdir(DATA_DIR)
-  check_and_mkdir(set_dir)
+  check_and_mkdir(dset_dir)
   check_and_download_file(data_path, url)
 
   return data_path
@@ -37,6 +36,7 @@ function dataset.data_path(name, url, file)
     if not is_file(local_path) then
         do_with_cwd(data_dir,
           function()
+              print("decompressing file: ", data_path)
               decompress_file(data_path)
           end)
     end
@@ -66,9 +66,6 @@ end
 function dataset.rand_pair(v_min, v_max)
    local a = dataset.rand_between(v_min, v_max)
    local b = dataset.rand_between(v_min, v_max)
-   --local start = math.min(a, b)
-   --local finish = math.max(a, b)
-   --return start, finish
    return a,b
 end
 
@@ -83,5 +80,51 @@ function dataset.sort_by_class(samples, labels)
     end
 
     return sorted_samples, sorted_labels
+end
+
+
+function dataset.rotator(start, delta)
+   local angle = start
+   return function(src, dst)
+      image.rotate(dst, src, angle)
+      angle = angle + delta
+   end
+end
+
+
+function dataset.translator(startx, starty, dx, dy)
+   local started = false
+   local cx = startx
+   local cy = starty
+   return function(src, dst)
+      image.translate(dst, src, cx, cy)
+      cx = cx + dx
+      cy = cy + dy
+   end
+end
+
+
+function dataset.zoomer(start, dz)
+   local factor = start
+   return function(src, dst)
+      local src_width  = src:size(2)
+      local src_height = src:size(3)
+      local width      = math.floor(src_width * factor)
+      local height     = math.floor(src_height * factor)
+
+      local res = image.scale(src, width, height)
+      if factor > 1 then
+         local sx = math.floor((width - src_width) / 2)+1
+         local sy = math.floor((height - src_height) / 2)+1
+         dst:copy(res:narrow(2, sx, src_width):narrow(3, sy, src_height))
+      else
+         local sx = math.floor((src_width - width) / 2)+1
+         local sy = math.floor((src_height - height) / 2)+1
+         dst:zero()
+         dst:narrow(2, sx,  width):narrow(3, sy, height):copy(res)
+      end
+
+      factor = factor + dz
+   end
 end
 

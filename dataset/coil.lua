@@ -13,7 +13,6 @@ require 'fn/seq'
 require 'dataset'
 require 'dataset/table_dataset'
 
---local Coil = torch.class("dataset.Coil")
 Coil = {}
 
 Coil.name         = 'coil'
@@ -32,8 +31,7 @@ Coil.default_options = {
 }
 
 local function coil_image_dir()
-	local image_dir = dataset.data_path(Coil.name, Coil.url, Coil.file)
-   return image_dir
+	return dataset.data_path(Coil.name, Coil.url, Coil.file)
 end
 
 
@@ -100,4 +98,5 @@ function Coil.dataset(options)
 
    return dataset.TableDataset(table, Coil)
 end
+
 

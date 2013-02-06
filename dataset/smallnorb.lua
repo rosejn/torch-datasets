@@ -15,7 +15,9 @@ package.path = '?/init.lua;' .. package.path
 require 'dataset'
 require 'dataset/pipeline'
 require 'dataset/lushio'
+require 'dataset/table_dataset'
 
+require 'dataset/whitening'
 
 SmallNorb = {}
 
@@ -50,7 +52,6 @@ local function raw_data(filename, toTensor)
 end
 
 
-
 --[[ Split metadata into separate fields
 
 The fields are:
@@ -75,10 +76,9 @@ end
 local function normalize(enabled)
 	return function(stages)
 		if enabled then
-			table.insert(stages, pipe.normalize)
-		else
-			return stages
+			table.insert(stages, pipe.normalizer)
 		end
+		return stages
 	end
 end
 
@@ -89,7 +89,7 @@ local function downsample(factor)
 		if factor ~= nil then
 			local width = SmallNorb.dimensions[3] / factor
 			local height = SmallNorb.dimensions[2] / factor
-			table.insert(stages, pipe.scaler(width, height))
+			table.insert(stages, pipe.resizer(width, height))
 			return stages
 		else
 			return stages
@@ -102,7 +102,7 @@ end
 local function process_pairs(pair_format)
 
 	local function half(n)
-		return function(sample) sample.data = sample.data[n] return sample end
+		return function(sample) sample.data = sample.data:narrow(1,n,n) return sample end
 	end
 
 	return function(stages)
@@ -165,7 +165,7 @@ Parameters:
 
 * test (optional boolean, default : false)
 	use test set instead of training set
-* n_frames (optional unsigned) :
+* size (optional unsigned) :
 	number of frames to return
 * pairs (optional string : ('combined' | 'left' | 'right'):
 	How should stereo pairs be loaded? 'combined' returns the two sub-images in each example,
@@ -189,12 +189,13 @@ function SmallNorb.dataset(opt)
 
 	opt = opt or {}
 
-	local test              = arg.optional(opts, 'test', false)
-	local n_frames          = arg.optional(opt, 'n_frames', SmallNorb.size/2)
+	local test              = arg.optional(opt, 'test', false)
+	local size              = arg.optional(opt, 'size', SmallNorb.size/2)
 	local pair_format       = arg.optional(opt, 'pairs', 'combined')
 	local class             = arg.optional(opt, 'class')
 	local downsample_factor = arg.optional(opt, 'downsample')
 	local do_normalize      = arg.optional(opt, 'normalize', false)
+	local zca_whiten        = arg.optional(opt, 'zca_whiten', false)
 	local instance          = arg.optional(opt, 'instance')
 	local elevation         = arg.optional(opt, 'elevation')
 	local azimuth           = arg.optional(opt, 'azimuth')
@@ -219,7 +220,7 @@ function SmallNorb.dataset(opt)
 
 	-- TODO: verify that arguments are valid
 	local source = fn.thread(
-		pipe.data_table_source(raw),
+		dataset.TableDataset(raw):sampler{shuffled = false},
 		filter(class, 'classes', class_id),
 		filter(instance, 'instance'),
 		filter(elevation, 'elevation'),
@@ -237,9 +238,15 @@ function SmallNorb.dataset(opt)
 	)
 
 	local pipeline = pipe.pipeline(unpack(stages))
-	local table = pipe.to_data_table(n_frames, pipeline)
+	local table = pipe.data_table_sink(size, pipeline)
+	
+	local d =  dataset.TableDataset(table, SmallNorb)
 
-	return dataset.TableDataset(table, SmallNorb)
+	if zca_whiten then
+		d:zca_whiten()
+	end
+
+	return d
 end
 
 

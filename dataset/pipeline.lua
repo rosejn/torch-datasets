@@ -6,7 +6,6 @@ require 'pprint'
 require 'util'
 require 'fn'
 require 'fn/seq'
-require 'dataset/table_dataset'
 
 -- A dataset pipeline system, allowing for easy loading and transforming of
 -- datasets.  A pipeline processes individual samples, which are just tables of
@@ -36,7 +35,7 @@ pipe = {}
 --
 --   local processor =
 --    pipe.line({pipe.image_loader,
---              pipe.scaler(width, height),
+--              pipe.resizer(width, height),
 --              pipe.rgb2yuv,
 --              pipe.normalizer,
 --              pipe.spatial_normalizer(1, 7, 1, 1),
@@ -65,7 +64,7 @@ end
 --
 --    pipe.pipeline(pipe.file_data_source(path),
 --                  pipe.image_loader,
---                  pipe.scaler(width, height),
+--                  pipe.resizer(width, height),
 --                  pipe.rgb2yuv,
 --                  pipe.normalizer,
 --                  pipe.spatial_normalizer(1, 7, 1, 1),
@@ -74,6 +73,11 @@ end
 function pipe.pipeline(src, ...)
    local funcs = {...}
    return pipe.connect(src, pipe.line(funcs))
+end
+
+function pipe.filteredpipeline(src, filter, ...)
+   local funcs = {...}
+   return seq.filter(filter, pipe.connect(src, pipe.line(funcs)))
 end
 
 
@@ -110,35 +114,49 @@ end
 -- Returns a sequence of {filename = <fname>, path = <path> } entries for a
 -- directory dir.  If a pattern p is also passed, then only files which match
 -- the pattern will be returned.
+-- random : if random is true then, files will be returned in random order
+-- loop   : if true, then the file source will keep looping over files
 -- (Note, it doesn't have to be a whole match, so even a suffix match will work.)
 -- e.g.
 --   pipe.matching_paths('./data', '.png')
 --      => { { filename = 'image_1.png', path = 'data/image_1.png' } ... }
-function pipe.file_source(dir, p)
+function pipe.file_source(dir, p, random, loop)
+  if random == nil then random = false end
+  local fdir = fs.readdir(dir)
+  local myseq
+  if loop and random then
+     myseq = seq.mapcat(seq.shuffle, seq.repeat_val(fdir))
+  elseif loop then
+     myseq = seq.cycle(fdir)
+  elseif random then
+     myseq = seq.shuffle(fdir)
+  else 
+     myseq = seq.seq(fdir)
+  end
   local files = seq.map(function(filename)
      return {
         filename = filename,
         path = paths.concat(dir, filename)
      }
   end,
-  seq.seq(fs.readdir(dir)))
+  myseq)
 
-  if p then
-     return seq.filter(function(s)
-        return string.find(s.filename, p)
-     end,
-     files)
-  else
-     return files
-  end
+  return seq.filter(function(s)
+    if type(s.filename) ~= 'string' then return false end
+    if not paths.filep(s.path) then return false end
+    if p then
+       return string.find(s.filename, p)
+    end
+    return true
+  end,
+  files)
 end
-
 
 -- Returns a sequence of tables representing images in a directory, where
 -- each table has the path and filename properties.  (Use the image_loader stage
 -- to read the paths and load the images.)
-function pipe.image_dir_source(dir)
-   local files = pipe.file_source(dir)
+function pipe.image_dir_source(dir,random,loop)
+   local files = pipe.file_source(dir,nil, random,loop)
 
    return seq.filter(function(s)
       local suffix = string.match(s.filename, '%.(%a+)$')
@@ -148,12 +166,85 @@ function pipe.image_dir_source(dir)
 end
 
 
--- Turn a data table into a pipeline source, producing samples.
-function pipe.data_table_source(table)
-   local dataset = dataset.TableDataset(table)
-   return dataset:sampler({shuffled = false})
+-- Returns a cached source and loader combination.
+-- This is useful to read bunch of source objects from disk using the 
+-- loader and caching them. When all the samples in the cache are consumed, 
+-- it refills the cache.
+function pipe.cached_loader_source(source,loader,cachesize)
+
+  local cache = {}
+
+  local resetcache = function()
+      cache = {}
+      while #cache < cachesize do
+      table.insert(cache,loader(source()))
+    end
+  end
+
+  return function(sample)
+    if sample == nil then return nil end
+
+    if #cache == 0 then
+      resetcache()
+    end
+    return table.remove(cache)
+  end
 end
 
+
+-- Returns a loader/source combination that caches the 
+-- output of  loader(source()) and returns infinitely many 
+-- samples from the cache in order
+function pipe.batch_loader_source(source,loader)
+  local cache = {}
+
+  while true do
+    local s = source()
+    if not s then break end
+    table.insert(cache,loader(s))
+  end
+
+  local cntr = 0
+  return function()
+    local sample = cache[(cntr % #cache) + 1]
+    cntr = cntr + 1
+    return sample
+  end
+end
+
+
+-- Returns a sequence of tables representing videos in a directory, where
+-- each table has the path and filename properties. 
+-- This function also loads videos and returns frames from them.
+function pipe.video_dir_source(dir,suffix,random,loop)
+
+   local files = pipe.file_source(dir,nil, random,loop)
+
+   local video_files = seq.filter(function(s)
+      local suff = string.match(s.filename, '%.(%a+)$')
+      return suffix == suff
+   end,
+   files)
+
+   require 'ffmpeg'
+
+   local frame_counter = 0
+   local current_video_file
+   local current_video
+
+   return function()
+      current_video_file = current_video_file or video_files()
+      if not current_video or frame_counter == current_video.nframes then
+         current_video_file = video_files()
+         current_video = ffmpeg.Video(current_video_file.path)
+         frame_counter = 0
+      end
+      -- print(frame_counter)
+      frame_counter = frame_counter + 1
+      local frame = current_video[1][frame_counter]
+      return {data = frame, frame = frame_counter, path=current_video_file.path, ffmpeg = current_video}
+   end
+end
 
 -- Read data from a file on disk, returns a metadata table and a pipeline source.
 function pipe.disk_object_source(path)
@@ -186,8 +277,8 @@ end
 
 -- Load a data table from a file on disk.
 function pipe.data_table_from_file(path)
-   local md, src = pipe.disk_object_source(path)
-   return pipe.data_table_sink(md.size, src)
+   local src, metadata = pipe.disk_object_source(path)
+   return pipe.data_table_sink(metadata.size, src)
 end
 
 
@@ -224,6 +315,16 @@ function pipe.pprint(sample)
    return sample
 end
 
+
+-- Filter a sequence based on some field
+function pipe.filter(source, field, value)
+   return seq.filter(
+      function(sample)
+         return sample[field] == value
+      end,
+      source
+   )
+end
 
 --------------------------------------------------------------------------
 -- Pipeline Sinks
@@ -284,16 +385,16 @@ function pipe.disk_object_sink(path, metadata)
 
    return function(sample)
       if sample == nil then
-         print('end of sequence, writing size and closing file')
+         --print('end of sequence, writing size and closing file')
          file:seek(1)
          file:writeInt(count)
          file:close()
       else
-         --file:writeObject(util.deep_copy(sample))
+         file:writeObject(util.deep_copy(sample))
          -- Once the force patch is accepted, we can switch to this:
-         file:writeObject(sample, true)
+         --file:writeObject(sample, true)
          count = count + 1
-         print("wrote object: ", count)
+         --print("wrote object: ", count)
       end
 
       return sample
@@ -314,8 +415,16 @@ function pipe.image_loader(sample)
 
    local data = image.load(sample.path)
    local dims = data:size()
-   sample.width = dims[2]
-   sample.height = dims[3]
+   sample.width  = dims[#dims]
+   sample.height = dims[#dims-1]
+   sample.data = data
+   return sample
+end
+
+-- Loads the video sample.path using ffmpeg interface
+function pipe.video_loader(sample)
+   if not ffmpeg then require 'ffmpeg' end
+   local data = ffmpeg.Video(sample.path)
    sample.data = data
    return sample
 end
@@ -330,6 +439,16 @@ function pipe.rgb2yuv(sample)
    return sample
 end
 
+-- Converts RGB tensor sample.data to grayscale tensor
+function pipe.rgb2gray(sample)
+   if sample == nil then return nil end
+
+   if sample.data:dim() == 2 then return sample end
+   if sample.data:dim() == 3 and sample.data:dim() == 1 then return sample end
+
+   sample.data = image.rgb2y(sample.data)
+   return sample
+end
 
 -- Select sample.data[channel], for example to get only Y of YUV channel = 0.
 function pipe.select_channel(channel)
@@ -383,15 +502,19 @@ end
 
 
 -- Crop sample.data to a random patch of size width x height.
-function pipe.patch_sampler(width, height)
+function pipe.patch_sampler(patch_width, patch_height)
    return function(sample)
       if sample == nil then return nil end
-
-      local x = math.random(1, sample.width - width)
-      local y = math.random(1, sample.height - height)
-      sample.data   = image.crop(sample.data, x, y, x + width, y + height)
-      sample.width  = width
-      sample.height = height
+      local sample_width = sample.data:size(3)
+      local sample_height = sample.data:size(2)
+      if sample_width < patch_width or sample_height < patch_height then
+        error('sample smaller than crop size',sample,patch_width,patch_height)
+      end
+      local x = math.random(1, sample_width - patch_width)
+      local y = math.random(1, sample_height - patch_height)
+      sample.data   = image.crop(sample.data, x, y, x + patch_width, y + patch_height)
+      sample.width  = patch_width
+      sample.height = patch_height
       return sample
    end
 end
@@ -424,23 +547,67 @@ function pipe.spatial_normalizer(channel, radius, threshold, thresval)
    end
 end
 
+-- Applies local contrast normalization pre-processing
+-- if channel is not given, then all channels of an input are used
+-- if kernel is not given a 9x9 gaussian kernel is used.
+function pipe.lcn(channel,kernel)
+   return function(sample)
+      if sample == nil then return nil end 
+      if not channel then
+         channel = torch.range(1,sample.data:size(1)):storage():totable()
+      end
+      if type(channel) == number then
+         channel = {channel}
+      end
+      if channel[#channel] > sample.data:size(1) then
+         channel = torch.range(1,sample.data:size(1)):storage():totable()
+      end
+      local tdata
+      for i,c in pairs(channel) do
+         local t = image.lcn(sample.data[c],kernel)
+         if not tdata then
+            tdata = sample.data.new():resize(#channel,t:size(1),t:size(2))
+         end
+         tdata[i]:copy(t)
+      end
+      sample.data = tdata
+      sample.width = tdata:size(3)
+      sample.height = tdata:size(2)
+      return sample
+   end
+end
 
 -- Convert from continuous to binary data.
 function pipe.binarize(sample)
-   sample.data = sample:gt(0.5):float()
+   sample.data = sample.data:gt(0.5):float()
+   return sample
 end
 
+-- runs garbage collector every 'nupdates' number of updates
+-- this ensures that we clear out temporary tensors regularly
+function pipe.gc(nupdates)
+   nupdates = nupdates or 10
+   local cntr = 0
+   return function (sample)
+      if sample == nil then return nil end
+      cntr = cntr + 1
+      if math.mod(cntr,nupdates) == 0 then
+         collectgarbage()
+      end
+      return sample
+   end
+end
 
 -- Pad sample.data on all sides with value v (default = 0).
 function pipe.pad_values(width, v)
    v = v or 0
 
    return function(sample)
-      local new_sample = torch.Tensor(sample:size(1),
-                                      sample:size(2) + width*2,
-                                      sample:size(3) + width*2):fill(v)
-      new_sample:narrow(2, width+1, sample:size(2)):narrow(3, width+1, sample:size(3)):copy(sample)
-      sample.data = new_sample
+      local padded = torch.Tensor(sample.data:size(1),
+                                      sample.data:size(2) + width*2,
+                                      sample.data:size(3) + width*2):fill(v)
+      padded:narrow(2, width+1, sample.data:size(2)):narrow(3, width+1, sample.data:size(3)):copy(sample.data)
+      sample.data = padded
       return sample
    end
 end
@@ -487,13 +654,8 @@ function pipe.type(t, key)
    key = key or 'data'
 
    return function(sample)
-      if key then
-         sample[key] = sample[key][t](sample[key])
-      else
-         for k,_ in pairs(sample) do
-            sample[k] = sample[key][t](sample[key])
-         end
-      end
+      if sample == nil then return nil end
+      sample[key] = sample[key][t](sample[key])
       return sample
    end
 end
@@ -506,17 +668,6 @@ function pipe.div(n)
       sample.data:mul(factor)
       return sample
    end
-end
-
-
--- Filter a sequence based on some field
-function pipe.filter(source, field, value)
-   return seq.filter(
-      function(sample)
-         return sample[field] == value
-      end,
-      source
-   )
 end
 
 
@@ -572,9 +723,19 @@ function pipe.zoomer(dz)
 end
 
 
+-- Flatten the sample.data tensor to be 1D.
+function pipe.flatten(sample)
+   sample.data = sample.data:resize(sample.data:nElement())
+   return sample
+end
+
+
 pipe.arg_map = {
    {'resize',          pipe.resizer},
    {'crop',            pipe.cropper},
+   {'rotate',          pipe.rotator},
+   {'translate',       pipe.translator},
+   {'zoom',            pipe.zoomer},
    {'patches',         pipe.patch_sampler},
    {'flip_vertical',   pipe.flip_vertical},
    {'flip_horizontal', pipe.flip_horizontal},
@@ -585,45 +746,38 @@ pipe.arg_map = {
    {'binarize',        pipe.binarize},
    {'pad',             pipe.pad_values},
    {'type',            pipe.type},
+   {'flatten',         pipe.flatten},
 }
 
 
 function pipe.construct_pipeline(opts)
    local stages = {}
 
-   --print("{")
    for stage in seq.seq(pipe.arg_map) do
       local name = stage[1]
       local fn   = stage[2]
 
-      --print("name: ", name)
-
-      opt_val = opts[name]
+      local opt_val = opts[name]
       if opt_val then
-         --print("val: ", opt_val)
 
-         local args
-         if opt_val == true then
-            args = {}
-         elseif util.is_table(opt_val) then
+         local args = {}
+         if util.is_table(opt_val) then
             args = opt_val
          elseif util.is_number(opt_val) then
             args = {opt_val}
          end
 
          local transform
-         if #args == 0 then
+         if args ~= nil and #args == 0 then
             transform = fn
          else
             transform = fn(unpack(args))
          end
          table.insert(stages, transform)
-         --print(string.format("  %s(%s)", name, pretty_string(args)))
       end
    end
 
-   --print("}")
-   return pipe.line(stages)
+   return pipe.line(stages), #stages
 end
 
 

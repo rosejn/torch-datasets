@@ -2,6 +2,11 @@ require 'fn'
 require 'fn/seq'
 require 'util/arg'
 require 'dataset'
+require 'dataset/pipeline'
+require 'dataset/whitening'
+require 'pprint'
+
+
 local arg = util.arg
 
 local TableDataset = torch.class("dataset.TableDataset")
@@ -17,7 +22,7 @@ local TableDataset = torch.class("dataset.TableDataset")
 --   -- a 'dataset' of random samples with random class labels
 --   data_table = {
 --     data  = torch.Tensor(10, 20, 20),
---     class = torch.randperm(10)
+--     classes = torch.randperm(10)
 --   }
 --   metadata = { name = 'random', classes = {1,2,3,4,5,6,7,8,9,10} }
 --   dataset = TableDataset(data_table, metadata)
@@ -84,6 +89,65 @@ function TableDataset:sample(i)
 end
 
 
+local function animate(options, samples)
+   local rotation    = options.rotation or {}
+   local translation = options.translation or {}
+   local zoom        = options.zoom or {}
+   local frames      = options.frames or 10
+
+   local scratch_a = torch.Tensor()
+   local scratch_b = torch.Tensor()
+
+   local function animate_sample(sample)
+      local transformers = {}
+      if (#rotation > 0) then
+         local rot_start, rot_finish = dataset.rand_pair(rotation[1], rotation[2])
+         rot_start = rot_start * math.pi / 180
+         rot_finish = rot_finish * math.pi / 180
+         local rot_delta = (rot_finish - rot_start) / frames
+         table.insert(transformers, dataset.rotator(rot_start, rot_delta))
+      end
+
+      if (#translation > 0) then
+         local xmin_tx, xmax_tx = dataset.rand_pair(translation[1], translation[2])
+         local ymin_tx, ymax_tx = dataset.rand_pair(translation[3], translation[4])
+         local dx = (xmax_tx - xmin_tx) / frames
+         local dy = (ymax_tx - ymin_tx) / frames
+         table.insert(transformers, dataset.translator(xmin_tx, ymin_tx, dx, dy))
+      end
+
+      if (#zoom > 0) then
+         local zoom_start, zoom_finish = dataset.rand_pair(zoom[1], zoom[2])
+         local zoom_delta = (zoom_finish - zoom_start) / frames
+         table.insert(transformers, dataset.zoomer(zoom_start, zoom_delta))
+      end
+
+      local original = sample.data
+      scratch_a:resizeAs(sample.data)
+      scratch_b:resizeAs(sample.data)
+      return seq.repeatedly(frames,
+         function()
+            scratch_a:zero()
+            local a = original
+            local b = scratch_b
+            for _, transform in ipairs(transformers) do
+               transform(a, b)
+               a = b
+               if a == scratch_a then
+                  b = scratch_b
+               else
+                  b = scratch_a
+               end
+            end
+            sample.data = a
+            return sample
+         end)
+   end
+
+   return seq.mapcat(animate_sample, samples)
+end
+
+
 -- Returns an infinite sequence of data samples.  By default they
 -- are shuffled samples, but you can turn shuffling off.
 --
@@ -93,11 +157,27 @@ end
 --
 --   -- turn off shuffling
 --   sampler = dataset:sampler({shuffled = false})
+--
+--   -- generate animations over 10 frames for each sample, which will
+--   -- randomly rotate, translate, and/or zoom within the ranges passed.
+--   local anim_options = {
+--      frames      = 10,
+--      rotation    = {-20, 20},
+--      translation = {-5, 5, -5, 5},
+--      zoom        = {0.6, 1.4}
+--   }
+--   s = dataset:sampler({animate = anim_options})
+--
+--   -- pass a custom pipeline for post-processing samples
+--   s = dataset:sampler({pipeline = my_pipeline})
+--
 function TableDataset:sampler(options)
    options = options or {}
    local shuffled = arg.optional(options, 'shuffled', true)
    local indices
    local size = self:size()
+
+   local pipeline, pipe_size = pipe.construct_pipeline(options)
 
    local function make_sampler()
        if shuffled then
@@ -105,8 +185,23 @@ function TableDataset:sampler(options)
        else
            indices = seq.range(size)
        end
-       return seq.map(fn.partial(self.sample, self), indices)
-   end
+
+       local sample_seq = seq.map(fn.partial(self.sample, self), indices)
+
+       if options.animate then
+          sample_seq = animate(options.animate, sample_seq)
+       end
+
+       if pipe_size > 0 then
+          sample_seq = seq.map(pipeline, sample_seq)
+       end
+
+       if options.pipeline then
+          sample_seq = seq.map(options.pipeline, sample_seq)
+       end
+
+       return sample_seq
+    end
 
    return seq.flatten(seq.cycle(seq.repeatedly(make_sampler)))
 end
@@ -141,6 +236,30 @@ function TableDataset:mini_batch(i, options)
 
        return batch
    end
+end
+
+
+-- Returns a random mini batch consisting of a table of tensors.
+--
+--   local batch = dataset:random_mini_batch()
+--
+--   -- or use directly
+--   net:forward(dataset:random_mini_batch().data)
+--
+--   -- set the batch size using an options table
+--   local batch = dataset:random_mini_batch({size = 100})
+--
+--   -- or get batch as a sequence of samples, rather than a full tensor
+--   for sample in dataset:random_mini_batch({sequence = true}) do
+--     net:forward(sample.data)
+--   end
+function TableDataset:random_mini_batch(options)
+
+   options = options or {}
+   local batch_size   = arg.optional(options, 'size', 10)
+   -- sequence option handled in TableDataset:mini_batch
+
+   return self:mini_batch(math.random(self:size() / batch_size), options)
 end
 
 
@@ -220,3 +339,58 @@ function TableDataset:animations(options)
                   indices)
 end
 
+
+-- Return a pipeline source (i.e. a sequence of samples).
+function TableDataset:pipeline_source()
+   return self:sampler({shuffled = false})
+end
+
+
+local function channels(...)
+   channels = {...}
+   if #channels == 0 then
+      for i = 1,self.dataset.data:size(2) do
+         table.insert(channels, i)
+      end
+   end
+   return channels
+end
+
+
+-- Globally normalise the dataset (subtract mean and divide by std)
+--
+-- The optional arguments specify the indices of the channels that should be
+-- normalized. If no channels are specified normalize across all channels.
+function TableDataset:normalize_globally(...)
+
+   local function normalize(d)
+      local mean = d:mean()
+      local std = d:std()
+      d:add(-mean):div(std)
+   end
+
+   local channels = {...}
+   if #channels == 0 then
+      dataset.normalize(self.dataset.data)
+   else
+      for _,c in ipairs(channels) do
+         normalize(self.dataset.data[{ {}, c, {}, {} }])
+      end
+   end
+end
+
+
+-- Apply ZCA whitening to dataset (one or more channels)
+--
+-- The optional arguments specify the indices of the channels that should be
+-- normalized. If no channels are specified all channels are jointly whitened.
+function TableDataset:zca_whiten(...)
+   local channels = {...}
+   if #channels == 0 then
+      dataset.zca_whiten(self.dataset.data)
+   else
+      for _,c in ipairs(channels) do
+         dataset.zca_whiten(self.dataset.data[{ {}, c, {}, {} }])
+      end
+   end
+end
