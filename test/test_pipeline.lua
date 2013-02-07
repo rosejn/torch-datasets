@@ -1,6 +1,6 @@
 require 'fn/seq'
 require 'dataset'
-require 'dataset/table_dataset'
+require 'dataset/TableDataset'
 
 function tests.test_sampler()
     local dset = {data = torch.Tensor({{1}, {2}, {3}, {4}, {5}})}

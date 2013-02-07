@@ -11,7 +11,7 @@ require 'fn'
 require 'fn/seq'
 
 require 'dataset'
-require 'dataset/table_dataset'
+require 'dataset/TableDataset'
 
 
 BSR = {}

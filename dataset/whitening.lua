@@ -3,13 +3,13 @@ require 'unsup'
 require 'dataset'
 
 
--- ZCA-Whitening 
+-- ZCA-Whitening
 function dataset.zca_whiten(data)
 
 	local dims = data:size()
 	local nsamples = dims[1]
 	local n_dimensions = dims[2] * dims[3] * dims[4]
-	
+
 	local mdata = data:clone():reshape(nsamples, n_dimensions)
 	mdata:add(torch.ger(torch.ones(nsamples), torch.mean(mdata, 1):squeeze()):mul(-1))
 	local ce, cv = unsup.pcacov(data:reshape(nsamples, n_dimensions))

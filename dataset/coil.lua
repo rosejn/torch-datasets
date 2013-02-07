@@ -2,7 +2,6 @@ require 'torch'
 require 'image'
 require 'paths'
 require 'fs'
-require 'nn'
 
 require 'util'
 require 'util/file'
@@ -11,7 +10,7 @@ require 'fn'
 require 'fn/seq'
 
 require 'dataset'
-require 'dataset/table_dataset'
+require 'dataset/TableDataset'
 
 Coil = {}
 

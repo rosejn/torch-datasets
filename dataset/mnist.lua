@@ -11,7 +11,7 @@ require 'util/arg'
 local arg = util.arg
 
 require 'dataset'
-require 'dataset/table_dataset'
+require 'dataset/TableDataset'
 require 'dataset/whitening'
 
 

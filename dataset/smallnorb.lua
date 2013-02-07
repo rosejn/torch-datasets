@@ -15,7 +15,7 @@ package.path = '?/init.lua;' .. package.path
 require 'dataset'
 require 'dataset/pipeline'
 require 'dataset/lushio'
-require 'dataset/table_dataset'
+require 'dataset/TableDataset'
 
 require 'dataset/whitening'
 
