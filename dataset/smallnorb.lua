@@ -211,8 +211,8 @@ function SmallNorb.dataset(opt)
 	local raw = util.merge(
 		split_metadata(raw_data(files.info)),
 		{
-			data    = raw_data(files.dat):float(),
-			classes = raw_data(files.cat)
+			data  = raw_data(files.dat):float(),
+			class = raw_data(files.cat)
 		}
 	)
 
