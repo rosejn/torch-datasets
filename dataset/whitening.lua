@@ -18,8 +18,6 @@ function dataset.zca_whiten(data)
 	local P = torch.mm(cv, diag)
 	P = torch.mm(P, cv:t())
 	local wdata = torch.mm(mdata, P)
-	local mwdata = wdata:clone():add(torch.ger(torch.ones(nsamples), torch.mean(wdata, 1):squeeze()):mul(-1))
-	data:copy(wdata:reshape(dims[1], dims[2], dims[3], dims[4]):typeAs(data))
-	return torch.mean(mdata, 1), P
+	return wdata:reshape(dims[1], dims[2], dims[3], dims[4]):typeAs(data), P
 end
 

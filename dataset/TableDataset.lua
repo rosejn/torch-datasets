@@ -387,10 +387,10 @@ end
 function TableDataset:zca_whiten(...)
    local channels = {...}
    if #channels == 0 then
-      dataset.zca_whiten(self.dataset.data)
+      self.dataset.data = dataset.zca_whiten(self.dataset.data)
    else
       for _,c in ipairs(channels) do
-         dataset.zca_whiten(self.dataset.data[{ {}, c, {}, {} }])
+         self.dataset.data[{ {}, c, {}, {} }] = dataset.zca_whiten(self.dataset.data[{ {}, c, {}, {} }])
       end
    end
 end
