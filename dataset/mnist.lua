@@ -112,15 +112,20 @@ function Mnist.dataset(opts)
       samples, labels = dataset.sort_by_class(samples, labels)
    end
 
-   if binarize then
-      d:binarize(128)
-   end
-
    if (#scale == 2) then
       dataset.scale(samples, scale[1], scale[2])
    end
 
    local d = dataset.TableDataset({data = samples, class = labels}, Mnist)
+
+   if binarize then
+      if #scale == 2 then
+          threshold = (scale[2]+scale[1])/2
+      else 
+          threshold = 128
+      end
+      d:binarize(threshold)
+   end
 
    if normalize then
       d:normalize_globally()
