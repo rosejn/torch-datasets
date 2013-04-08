@@ -85,6 +85,7 @@ function Mnist.dataset(opts)
    test          = arg.optional(opts, 'test', false)
    scale         = arg.optional(opts, 'scale', {})
    normalize     = arg.optional(opts, 'normalize', false)
+   binarize     = arg.optional(opts, 'binarize', false)
    zca_whiten    = arg.optional(opts, 'zca_whiten', false)
    size          = arg.optional(opts, 'size', test and Mnist.test_size or Mnist.size)
    sort          = arg.optional(opts, 'sort', false)
@@ -98,6 +99,7 @@ function Mnist.dataset(opts)
    else
       data = Mnist.raw_data(size)
    end
+
    local samples = data:narrow(2, 1, Mnist.n_dimensions):clone()
    samples:resize(size, unpack(Mnist.dimensions))
 
@@ -115,6 +117,15 @@ function Mnist.dataset(opts)
    end
 
    local d = dataset.TableDataset({data = samples, class = labels}, Mnist)
+
+   if binarize then
+      if #scale == 2 then
+          threshold = (scale[2]+scale[1])/2
+      else 
+          threshold = 128
+      end
+      d:binarize(threshold)
+   end
 
    if normalize then
       d:normalize_globally()

@@ -6,7 +6,6 @@ require 'dataset/pipeline'
 require 'dataset/whitening'
 require 'pprint'
 
-
 local arg = util.arg
 
 local TableDataset = torch.class("dataset.TableDataset")
@@ -354,6 +353,22 @@ local function channels(...)
       end
    end
    return channels
+end
+
+
+-- Binarize the dataset: set to 0 any pixel strictly below the threshold, set to 1  those 
+-- above or equal to the threshold.
+--
+-- The argument specifies the threshold value for 0.
+function TableDataset:binarize(threshold)
+
+   local function binarize(x, threshold)
+       x[x:lt(threshold)] = 0;
+       x[x:ge(threshold)] = 1;
+       return x
+   end
+
+   binarize(self.dataset.data, threshold)
 end
 
 
