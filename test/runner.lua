@@ -1,6 +1,6 @@
 #!/usr/bin/env torch
 
-package.path = './?/init.lua;' .. package.path
+package.path = './?/init.lua;./?.lua;' .. package.path
 
 require 'paths'
 
