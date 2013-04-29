@@ -402,12 +402,13 @@ end
 function TableDataset:zca_whiten(...)
    local channels = {...}
    local P = {}
+   local invP = {}
    if #channels == 0 then
-      self.dataset.data, P = dataset.zca_whiten(self.dataset.data)
+      self.dataset.data, P, invP = dataset.zca_whiten(self.dataset.data)
    else
       for _,c in ipairs(channels) do
-         self.dataset.data[{ {}, c, {}, {} }], P[c] = dataset.zca_whiten(self.dataset.data[{ {}, c, {}, {} }])
+         self.dataset.data[{ {}, c, {}, {} }], P[c], invP[c] = dataset.zca_whiten(self.dataset.data[{ {}, c, {}, {} }])
       end
    end
-   return P
+   return P, invP
 end
