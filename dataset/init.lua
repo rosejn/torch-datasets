@@ -73,7 +73,7 @@ end
 function dataset.sort_by_class(samples, labels)
     local size = labels:size()[1]
     local sorted_labels, sort_indices = torch.sort(labels)
-    local sorted_samples = torch.Tensor(samples:size())
+    local sorted_samples = samples.new(samples:size())
 
     for i=1, size do
         sorted_samples[i] = samples[sort_indices[i]]
