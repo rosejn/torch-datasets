@@ -262,7 +262,8 @@ function TableDataset:random_mini_batch(options)
 end
 
 
--- Returns an infinite sequence of mini batches.
+-- Returns a finite sequence of mini batches.
+-- The sequence provides each non-overlapping mini batch once.
 --
 --   -- default options returns contiguous tensors of batch size 10
 --   for batch in dataset:mini_batches() do
