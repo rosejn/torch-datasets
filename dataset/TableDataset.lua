@@ -206,7 +206,8 @@ function TableDataset:sampler(options)
 end
 
 
--- Returns the ith mini batch consisting of a table of tensors.
+-- Returns the mini batch starting at the i-th example.
+-- Use options.size to specify the mini batch size.
 --
 --   local batch = dataset:mini_batch(1)
 --
@@ -258,7 +259,7 @@ function TableDataset:random_mini_batch(options)
    local batch_size   = arg.optional(options, 'size', 10)
    -- sequence option handled in TableDataset:mini_batch
 
-   return self:mini_batch(math.random(self:size() / batch_size), options)
+   return self:mini_batch(torch.random(1, self:size() - batch_size + 1), options)
 end
 
 
