@@ -141,7 +141,7 @@ function ImageSet.dataset(opts)
     if patch_width > 0 and patch_height > 0 then
         postpipe = pipe.line({pipe.patch_sampler(patch_width,patch_height)})
     end
-    sampler = dataset:sampler({shuffled = true, pipeline = postpipe})
+    local sampler = dataset:sampler({shuffled = true, pipeline = postpipe})
 
     local thres = function(sample)
         if std_thres == 0 or torch.std(sample.data) > std_thres then

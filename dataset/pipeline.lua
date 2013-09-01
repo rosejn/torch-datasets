@@ -522,8 +522,8 @@ function pipe.patch_sampler(patch_width, patch_height)
       if sample_width < patch_width or sample_height < patch_height then
         error('sample smaller than crop size',sample,patch_width,patch_height)
       end
-      local x = math.random(1, sample_width - patch_width)
-      local y = math.random(1, sample_height - patch_height)
+      local x = torch.random(1, sample_width - patch_width)
+      local y = torch.random(1, sample_height - patch_height)
       sample.data   = image.crop(sample.data, x, y, x + patch_width, y + patch_height)
       sample.width  = patch_width
       sample.height = patch_height
